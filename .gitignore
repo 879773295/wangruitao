@@ -1,5 +1,7 @@
 save/
 data/
+.venv/
+pretrained_models/
 *.swp
 __pycache__/
 *.pyc
@@ -7,6 +9,5 @@ __pycache__/
 *.ipynb
 *.pth
 *.json
-*.sh
 .ipynb_checkpoints/
 jupyter_notebook/

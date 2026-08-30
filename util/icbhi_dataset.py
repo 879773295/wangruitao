@@ -1,4 +1,3 @@
-from curses import meta
 import os
 import cv2
 import pickle
@@ -135,7 +134,12 @@ class ICBHIDataset(Dataset):
             else:  # use all dataset
                 if idx in patient_dict:
                     self.filenames.append(f)
-        
+
+        # TEMPORARY: limit files for quick verification (env ICBHI_MAX_FILES)
+        _max_files = os.environ.get('ICBHI_MAX_FILES')
+        if _max_files:
+            self.filenames = self.filenames[:int(_max_files)]
+
         self.audio_data = []  # each sample is a tuple with (audio_data, label, filename)
         self.metadata = []  # (age, sex, adult_BMI, child_weight, child_height, device_idx)
         self.labels = []

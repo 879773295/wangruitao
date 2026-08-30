@@ -119,6 +119,9 @@ def parse_args():
     # for AST
     parser.add_argument('--audioset_pretrained', action='store_true',
                         help='load from imagenet- and audioset-pretrained model')
+    # for Frequency Band Embedding
+    parser.add_argument('--use_freq_band_embed', action='store_true',
+                        help='enable Frequency Band Embedding (FBE) for AST model')
     # for SSAST
     parser.add_argument('--ssast_task', type=str, default='ft_avgtok', 
                         help='pretraining or fine-tuning task', choices=['ft_avgtok', 'ft_cls'])
@@ -151,7 +154,7 @@ def parse_args():
         args.model_name += '_{}'.format(args.tag)
 
     if args.method in ['patchmix', 'patchmix_cl']:
-        assert args.model in ['ast', 'ssast']
+        assert args.model in ['ast', 'ast_fbe', 'ssast']
     
     args.save_folder = os.path.join(args.save_dir, args.model_name)
     if not os.path.isdir(args.save_folder):
@@ -236,15 +239,17 @@ def set_loader(args):
     return train_loader, val_loader, args
 
 
-def set_model(args):    
+def set_model(args):
     kwargs = {}
-    if args.model == 'ast':
+    if args.model in ['ast', 'ast_fbe']:
         kwargs['input_fdim'] = int(args.h * args.resz)
         kwargs['input_tdim'] = int(args.w * args.resz)
         kwargs['label_dim'] = args.n_cls
         kwargs['imagenet_pretrain'] = args.from_sl_official
         kwargs['audioset_pretrain'] = args.audioset_pretrained
         kwargs['mix_beta'] = args.mix_beta  # for Patch-MixCL
+        if args.model == 'ast_fbe':
+            kwargs['use_freq_band_embed'] = True
     elif args.model == 'ssast':
         kwargs['label_dim'] = args.n_cls
         kwargs['fshape'], kwargs['tshape'] = args.fshape, args.tshape
@@ -255,8 +260,8 @@ def set_model(args):
         kwargs['load_pretrained_mdl_path'] = args.ssast_pretrained_type
         kwargs['mix_beta'] = args.mix_beta  # for Patch-MixCL
 
-    model = get_backbone_class(args.model)(**kwargs)    
-    classifier = nn.Linear(model.final_feat_dim, args.n_cls) if args.model not in ['ast', 'ssast'] else deepcopy(model.mlp_head)
+    model = get_backbone_class(args.model)(**kwargs)
+    classifier = nn.Linear(model.final_feat_dim, args.n_cls) if args.model not in ['ast', 'ast_fbe', 'ssast'] else deepcopy(model.mlp_head)
 
     if not args.weighted_loss:
         weights = None
@@ -268,7 +273,7 @@ def set_model(args):
         
         criterion = nn.CrossEntropyLoss(weight=weights)
 
-    if args.model not in ['ast', 'ssast'] and args.from_sl_official:
+    if args.model not in ['ast', 'ast_fbe', 'ssast'] and args.from_sl_official:
         model.load_sl_official_weights()
         print('pretrained model loaded from PyTorch ImageNet-pretrained')
 
@@ -305,7 +310,7 @@ def set_model(args):
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
-        
+
     model.cuda()
     classifier.cuda()
     projector.cuda()
@@ -479,7 +484,7 @@ def main():
     torch.cuda.manual_seed(args.seed)
     cudnn.deterministic = True
     cudnn.benchmark = True
-    
+
     best_model = None
     if args.dataset == 'icbhi':
         best_acc = [0, 0, 0]  # Specificity, Sensitivity, Score
