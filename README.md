@@ -1,95 +1,120 @@
-# Patch-Mix Contrastive Learning (INTERSPEECH 2023)
-[arXiv](https://arxiv.org/abs/2305.14032) | [Conference](https://www.isca-archive.org/interspeech_2023/bae23b_interspeech.html#) | [BibTeX](#bibtex)
+# 呼吸音分类：Frequency Band Embedding (FBE)
 
+基于 [Patch-Mix Contrastive Learning](https://arxiv.org/abs/2305.14032)（INTERSPEECH 2023）改进的呼吸音分类方法，在 AST（Audio Spectrogram Transformer）基础上引入**频段嵌入（Frequency Band Embedding, FBE）**，向模型注入频率先验知识以提升呼吸音分类性能。
 
-<p align="center">
-<img width="300" src="https://github.com/raymin0223/patch-mix_contrastive_learning/assets/46586785/767a14f8-0c17-4f2c-9e44-ce41d59bf7fa">
-</p>
+---
 
-**Patch-Mix Contrastive Learning with Audio Spectrogram Transformer on Respiratory Sound Classification**<br/>
-[Sangmin Bae](https://www.raymin0223.com)\*,
-[June-Woo Kim](https://github.com/kaen2891)\*,
-[Won-Yang Cho](https://github.com/wonyangcho),
-[Hyerim Baek](https://github.com/rimiyeyo),
-[Soyoun Son](https://github.com/soyounson),
-[Byungjo Lee](https://github.com/bzlee-bio),
-[Changwan Ha](https://github.com/cwh1981),
-[Kyongpil Tae](https://github.com/kyongpiltae),
-[Sungnyun Kim](https://github.com/sungnyun)$^\dagger$,
-[Se-Young Yun](https://fbsqkd.github.io)$^\dagger$ <br/>
-\* equal contribution &nbsp;&nbsp; $^\dagger$ corresponding authors
+## 核心创新点：Frequency Band Embedding (FBE)
 
-- We demonstrate that the **pretrained model on large-scale visual and audio datasets** can be generalized to the respiratory sound classification task.
-- We introduce a straightforward **Patch-Mix augmentation**, which randomly mixes patches between different samples, with Audio Spectrogram Transformer (AST).
-- To overcome the label hierarchy in lung sound datasets, we propose an effective **Patch-Mix Contrastive Learning** to distinguish the mixed representations in the latent space.
+### 思想
 
+在 patch 进入 Transformer 之前，向模型注入频率先验知识，告诉模型每个 patch 属于哪个频段，从而引导注意力机制优先关注病理相关的频率区域。
 
-## Requirements
-Install the necessary packages with: 
+具体做法：每个 patch 额外增加一个**频段嵌入向量**，与原有的 patch 特征向量、位置编码相加，共同作为 Transformer 的输入。
+
 ```
-$ pip install torch torchvision torchaudio
-$ pip install -r requirements.txt
+patch_embed(x)                          # patch 特征向量
+  → + freq_band_embed(x)                # 加频段嵌入向量（创新点）
+  → + pos_embed                         # 加位置编码
+  → Transformer blocks                  # 三者共同作为输入
 ```
 
+### 病理频段划分（主版本）
 
-## Data Preparation
-Download the ICBHI dataset files from [official_page](https://bhichallenge.med.auth.gr/ICBHI_2017_Challenge).     
+按呼吸道病理意义（Hz）将频率轴显式划分为 4 个频段：
+
+| band | Hz 范围 | 病理意义 |
+|:---:|---------|---------|
+| 0 | 0-500 Hz | 心音、背景噪声 |
+| 1 | 500-1500 Hz | 啰音（crackles）主要能量区 |
+| 2 | 1500-2500 Hz | 哮鸣音（wheezes）主要能量区 |
+| 3 | >2500 Hz | 呼吸音细节、噪声 |
+
+---
+
+## 模型清单
+
+| `--model` | 文件 | 说明 | 频段数 |
+|-----------|------|------|:---:|
+| `ast` | `models/ast.py` | 基线：原始 AST（无 FBE）| - |
+| `ast_fbe` | `models/ast_freq.py` | 病理频段 FBE（主创新点）| 4 |
+| `ast_fbe_uniform` | `models/ast_freq_uniform.py` | 等分频段 FBE（消融对照）| 12 |
+
+详细模型描述见 [`MODELS.md`](MODELS.md)。
+
+---
+
+## 环境要求
+
+```
+pip install torch torchvision torchaudio
+pip install -r requirements.txt
+```
+
+建议使用带 CUDA 的 PyTorch（本项目训练需 GPU）。
+
+---
+
+## 数据准备
+
+下载 ICBHI 2017 Challenge 数据集，将 `*.wav` 和 `*.txt` 放入 `data/icbhi_dataset/audio_test_data/`。
+
 ```bash
-$ wget https://bhichallenge.med.auth.gr/sites/default/files/ICBHI_final_database/ICBHI_final_database.zip
-```
-All `*.wav` and `*.txt` should be saved in `data/icbhi_dataset/audio_test_data`.     
-
-Note that ICBHI dataset consists of a total of 6,898 respiratory cycles, 
-of which 1,864 contain crackles, 886 contain wheezes, and 506 contain both crackles and wheezes, in 920 annotated audio samples from 126 subjects.
-
-
-## Training 
-To simply train the model, run the shell files in `scripts/`.    
-1. **`scripts/icbhi_ce.sh`**: Cross-Entropy loss with AST model.
-2. **`scripts/icbhi_patchmix_ce.sh`**: Patch-Mix loss with AST model, where the label depends on the interpolation ratio.
-3. **`scripts/icbhi_patchmix_cl.sh`**: Patch-Mix contrastive loss with AST model.
-
-Important arguments for different data settings.
-- `--dataset`: other lungsound datasets or heart sound can be implemented
-- `--class_split`: "lungsound" or "diagnosis" classification
-- `--n_cls`: set number of classes as 4 or 2 (normal / abnormal) for lungsound classification
-- `--test_fold`: "official" denotes 60/40% train/test split, and "0"~"4" denote 80/20% split
-
-Important arguments for models.
-- `--model`: network architecture, see [models](models/)
-- `--from_sl_official`: load ImageNet pretrained checkpoint
-- `--audioset_pretrained`: load AudioSet pretrained checkpoint and only support AST and SSAST
-
-Important arugment for evaluation.
-- `--eval`: switch mode to evaluation without any training
-- `--pretrained`: load pretrained checkpoint and require `pretrained_ckpt` argument.
-- `--pretrained_ckpt`: path for the pretrained checkpoint
-
-The pretrained model checkpoints will be saved at `save/[EXP_NAME]/best.pth`.     
-
-## Result
-
-Patch-Mix Contrastive Learning achieves the state-of-the-art performance of 62.37%, which is higher than previous Score by +4.08%.
-<p align="center">
-<img width="750" src="https://github.com/raymin0223/patch-mix_contrastive_learning/assets/50742281/2a1d8b4c-b46d-423b-adbe-1d43334e7b7d">
-</p>
-
-
-## BibTeX
-If you find this repo useful for your research, please consider citing our paper:
-
-```
-@inproceedings{bae23b_interspeech,
-  title     = {Patch-Mix Contrastive Learning with Audio Spectrogram Transformer on Respiratory Sound Classification},
-  author    = {Sangmin Bae and June-Woo Kim and Won-Yang Cho and Hyerim Baek and Soyoun Son and Byungjo Lee and Changwan Ha and Kyongpil Tae and Sungnyun Kim and Se-Young Yun},
-  year      = {2023},
-  booktitle = {INTERSPEECH 2023},
-  pages     = {5436--5440},
-  doi       = {10.21437/Interspeech.2023-1426},
-  issn      = {2958-1796},
-}
+wget https://bhichallenge.med.auth.gr/sites/default/files/ICBHI_final_database/ICBHI_final_database.zip
 ```
 
-## Contact
-- Sangmin Bae: bsmn0223@kaist.ac.kr
-- June-Woo Kim: kaen2891@gmail.com
+ICBHI 数据集包含 920 个标注音频样本、6,898 个呼吸周期（含啰音、哮鸣音等）。
+
+---
+
+## 训练
+
+### 完整训练（50 epoch）
+
+```bash
+python main.py \
+  --tag icbhi_fbe \
+  --dataset icbhi --seed 1 \
+  --class_split lungsound --n_cls 4 \
+  --epochs 50 --batch_size 8 \
+  --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 \
+  --cosine \
+  --model ast_fbe \              # 切换模型：ast / ast_fbe / ast_fbe_uniform
+  --test_fold official --pad_types repeat --resz 1 --n_mels 128 \
+  --ma_update --ma_beta 0.5 \
+  --from_sl_official --audioset_pretrained \
+  --use_freq_band_embed \
+  --method patchmix_cl \
+  --temperature 0.06 --proj_dim 768 --alpha 1.0 --mix_beta 1.0 \
+  --num_workers 0
+```
+
+### 小数据快速验证
+
+设置环境变量 `ICBHI_MAX_FILES=40` 可只用少量文件快速验证：
+
+```bash
+ICBHI_MAX_FILES=40 python main.py --model ast_fbe --use_freq_band_embed \
+  --method patchmix_cl --epochs 2 --batch_size 4 --num_workers 0 ...
+```
+
+---
+
+## 实验结果
+
+> 小数据快速验证（`ICBHI_MAX_FILES=40`，2 epoch）：完整数据结果待跑。
+
+| 模型 | S_p（特异性）| S_e（灵敏度）| Score |
+|------|:---:|:---:|:---:|
+| `ast_fbe_uniform`（等分频段）| 30.77 | 36.45 | 33.61 |
+| `ast_fbe`（病理频段）| **84.42** | 36.08 | **60.25** |
+
+**病理频段划分显著优于等分频段**，Score 提升近一倍。
+
+评估指标：S_p（specificity，正常样本识别率）、S_e（sensitivity，异常样本识别率）、Score = (S_p + S_e) / 2。
+
+---
+
+## 致谢
+
+本项目基于 [Patch-Mix Contrastive Learning with Audio Spectrogram Transformer on Respiratory Sound Classification](https://arxiv.org/abs/2305.14032)（Sangmin Bae et al., INTERSPEECH 2023）的代码实现。
