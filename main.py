@@ -154,7 +154,7 @@ def parse_args():
         args.model_name += '_{}'.format(args.tag)
 
     if args.method in ['patchmix', 'patchmix_cl']:
-        assert args.model in ['ast', 'ast_fbe', 'ssast']
+        assert args.model in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ssast']
     
     args.save_folder = os.path.join(args.save_dir, args.model_name)
     if not os.path.isdir(args.save_folder):
@@ -241,14 +241,14 @@ def set_loader(args):
 
 def set_model(args):
     kwargs = {}
-    if args.model in ['ast', 'ast_fbe']:
+    if args.model in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform']:
         kwargs['input_fdim'] = int(args.h * args.resz)
         kwargs['input_tdim'] = int(args.w * args.resz)
         kwargs['label_dim'] = args.n_cls
         kwargs['imagenet_pretrain'] = args.from_sl_official
         kwargs['audioset_pretrain'] = args.audioset_pretrained
         kwargs['mix_beta'] = args.mix_beta  # for Patch-MixCL
-        if args.model == 'ast_fbe':
+        if args.model in ['ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform']:
             kwargs['use_freq_band_embed'] = True
     elif args.model == 'ssast':
         kwargs['label_dim'] = args.n_cls
@@ -261,7 +261,7 @@ def set_model(args):
         kwargs['mix_beta'] = args.mix_beta  # for Patch-MixCL
 
     model = get_backbone_class(args.model)(**kwargs)
-    classifier = nn.Linear(model.final_feat_dim, args.n_cls) if args.model not in ['ast', 'ast_fbe', 'ssast'] else deepcopy(model.mlp_head)
+    classifier = nn.Linear(model.final_feat_dim, args.n_cls) if args.model not in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ssast'] else deepcopy(model.mlp_head)
 
     if not args.weighted_loss:
         weights = None
@@ -273,7 +273,7 @@ def set_model(args):
         
         criterion = nn.CrossEntropyLoss(weight=weights)
 
-    if args.model not in ['ast', 'ast_fbe', 'ssast'] and args.from_sl_official:
+    if args.model not in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ssast'] and args.from_sl_official:
         model.load_sl_official_weights()
         print('pretrained model loaded from PyTorch ImageNet-pretrained')
 

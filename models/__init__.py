@@ -2,7 +2,8 @@ from .cnn6 import CNN6
 from .resnet import ResNet10, ResNet18, ResNet34, ResNet50, ResNet101
 from .efficientnet import EfficientNet_B0, EfficientNet_B1, EfficientNet_B2
 from .ast import ASTModel
-from .ast_freq import ASTModel as ASTModelFBE  # AST with Frequency Band Embedding
+from .ast_freq import ASTModel as ASTModelFBE  # AST + 病理频段 FBE (4 band)
+from .ast_freq_uniform import ASTModel as ASTModelUniform  # AST + 等分频段 FBE (12 band)
 from .ssast import SSASTModel
 from .projector import Projector
 
@@ -17,7 +18,9 @@ _backbone_class_map = {
     'efficientnet_b1': EfficientNet_B1,
     'efficientnet_b2': EfficientNet_B2,
     'ast': ASTModel,
-    'ast_fbe': ASTModelFBE,  # AST with Frequency Band Embedding
+    'ast_fbe': ASTModelFBE,  # AST + 病理频段 FBE (4 band)
+    'ast_fbe_patho': ASTModelFBE,  # 别名，更明确
+    'ast_fbe_uniform': ASTModelUniform,  # AST + 等分频段 FBE (12 band)
     'ssast': SSASTModel
 }
 
