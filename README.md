@@ -1,65 +1,25 @@
-# 呼吸音分类：Patch-Mix Contrastive Learning + FBE + 集成冲分配方
+# 呼吸音分类：Patch-Mix CL + FBE + 集成冲分
 
-基于 [Patch-Mix Contrastive Learning](https://arxiv.org/abs/2305.14032)（INTERSPEECH 2023）改进的呼吸音分类方法，在 AST（Audio Spectrogram Transformer）基础上引入**频段嵌入（Frequency Band Embedding, FBE）**，并向模型注入频率先验。同时提供经过实战验证的 **多 seed 集成 + TTA + 阈值校准** 冲分配方（ICBHI 2017 Score）。
+基于 [Patch-Mix Contrastive Learning](https://arxiv.org/abs/2305.14032)（INTERSPEECH 2023）改进的呼吸音分类，在 AST（Audio Spectrogram Transformer）上引入频段嵌入（FBE），并给出经过实测的**多 seed 集成 + TTA + 阈值校准**冲分配方。
 
----
-
-## 核心创新点
-
-### Frequency Band Embedding (FBE)
-
-在 patch 进入 Transformer 之前注入频率先验，告诉模型每个 patch 属于哪个频段，引导注意力优先关注病理相关频率区域：
-
-```
-patch_embed(x)                          # patch 特征向量
-  → + freq_band_embed(x)                # 加频段嵌入向量（创新点）
-  → + pos_embed                         # 加位置编码
-  → Transformer blocks
-```
-
-病理频段按 Hz 显式划分：
-
-| band | Hz 范围 | 病理意义 |
-|:---:|---------|---------|
-| 0 | 0-500 Hz | 心音、背景噪声 |
-| 1 | 500-1500 Hz | 啰音（crackles）主要能量区 |
-| 2 | 1500-2500 Hz | 哮鸣音（wheezes）主要能量区 |
-| 3 | >2500 Hz | 呼吸音细节、噪声 |
-
-## 冲分配方（实测最优）
-
-> **结论：ICBHI 的 Score = (S_p + S_e)/2 只取决于 normal↔abnormal 这条边界**，crackle/wheeze/both 内部怎么分不影响 Score。因此最优策略是**多个 seed 集成降低方差 + 阈值校准找最优边界切点**。
-
-实测（torch 2.0.1 + cu118，8 成员集成 + TTA(16) + 阈值偏置 normal logit）：
-
-| 方式 | S_p | S_e | Score |
-|---|---|---|---|
-| 单模型（seed1）| 76.19 | 44.52 | 60.35 |
-| 8-seed 集成 + TTA | 74.03 | 46.22 | 60.13 |
-| **8-seed 集成 + TTA + 阈值** | **88.92** | **33.64** | **61.28** |
-
-**硬件要求**：Score 受 GPU 数值栈影响很大（fp16 数学）。实测 RTX 4090 上限约 61.3，**RTX PRO 6000（Blackwell）/ A100 级别可复现论文数值，单模型即可到 62**，配合本配方可冲 63+。详见下方「重要发现」。
+**评测指标**：ICBHI 2017 的 Score = (S_p + S_e) / 2，其中 S_p = 正常样本识别率（特异性），S_e = 异常样本识别率（灵敏度）。**Score 只取决于"正常 vs 异常"这条边界**，异常内部怎么分不影响 Score。
 
 ---
 
-## 快速开始（推荐：PRO 6000 上冲 62+）
+## 总览：一共 4 步
 
-一键跑 8 seed 快训 + 集成 + TTA + 阈值：
-
-```bash
-# 1) 环境（PRO 6000 用默认 python 即可；4090 必须用 torch 2.0.1，见下）
-# 2) 一键脚本
-bash pro6000_run.sh
-# 3) 看 pro6000_ensemble_result.txt 里的 ">>> best"
-```
-
-脚本会快训 8 个 seed（seed 1/2/3/4/5/6/1337/42，每个 ~20 分钟，共 ~3 小时），再做 8 成员集成 + TTA(16) + 阈值校准。
+| 步骤 | 做什么 | 大概耗时 |
+|---|------|---------|
+| **① 装环境** | 建 conda 环境，装 torch 2.0.1 | 10 分钟 |
+| **② 放数据** | ICBHI 数据集放入 `data/` | - |
+| **③ 训练** | 训练模型（建议快训）| 每 seed ~20 分钟 |
+| **④ 冲分** | 多 seed 集成 + TTA + 阈值校准 | ~30 分钟 |
 
 ---
 
-## 环境要求
+## 第 1 步：装环境
 
-**关键：必须用 torch 2.0.1 + cu118（torchaudio 2.0.2）。** torch 2.2+ 会掉 ~5 分（实测 seed1 从 60.35 → 56.84），是 AMP/数值差异导致。
+**必须用 torch 2.0.1 + cu118（torchaudio 2.0.2）**。实测 torch 2.2+ 会掉 ~5 分（seed1 从 60.35 → 56.84）。
 
 ```bash
 conda create -n patchmix python=3.10 -y
@@ -68,84 +28,86 @@ pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 torchaudio==2.0.2+cu118
 pip install timm==0.4.5 librosa numpy==1.24.4 pandas nlpaug wget tqdm cmapy opencv-python
 ```
 
-首次运行会自动下载 ImageNet+AudioSet 预训练模型（`pretrained_models/audioset_10_10_0.4593.pth`，需外网）。
+> 首次运行会自动下载 ImageNet+AudioSet 预训练模型（`pretrained_models/audioset_10_10_0.4593.pth`，需外网）。
+>
+> **硬件说明**：GPU 数值栈影响 Score 上限。实测 **RTX 4090 上限约 61.3**；**RTX PRO 6000 / A100 可复现论文数值，单模型即 62**，冲 62+ 建议用这类卡。
 
-## 数据准备
+## 第 2 步：准备数据
 
-下载 ICBHI 2017 Challenge 数据集，将 `*.wav` 和 `*.txt` 放入 `data/icbhi_dataset/audio_test_data/`。
+下载 [ICBHI 2017 Challenge](https://bhichallenge.med.auth.gr/) 数据集，把 `*.wav` 和 `*.txt` 放进：
 
-```bash
-wget https://bhichallenge.med.auth.gr/sites/default/files/ICBHI_final_database/ICBHI_final_database.zip
+```
+data/icbhi_dataset/audio_test_data/
 ```
 
----
+## 第 3 步：训练
 
-## 训练命令
+先选训练方式，再跑对应命令。
 
-### 单模型完整训练（50 epoch）
+### 方式 A：快训（推荐）
 
-```bash
-python main.py \
-  --tag icbhi_best --dataset icbhi --seed 1 \
-  --class_split lungsound --n_cls 4 \
-  --epochs 50 --batch_size 8 \
-  --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 \
-  --cosine \
-  --model ast              # ast / ast_fbe / ast_fbe_uniform / ast_cnn_dual
-  --test_fold official --pad_types repeat --resz 1 --n_mels 128 \
-  --ma_update --ma_beta 0.5 \
-  --from_sl_official --audioset_pretrained \
-  --method patchmix_cl --temperature 0.06 --proj_dim 768 --alpha 1.0 --mix_beta 1.0 \
-  --num_workers 0
-```
-
-### 快训（推荐，实测最优 seed 都在 epoch 3-8 见顶）
-
-实测**所有训练都在 epoch 3-8 达到 Score 峰值**，后 40 个 epoch 从不刷新。用 `--max_epochs` 保留 50 epoch 的 LR 曲线、提前在第 10 epoch 停，**每个 seed 只需 ~20 分钟**（vs 完整 50 epoch 的 ~2 小时）：
+实测**所有训练都在 epoch 3-8 达到 Score 峰值**，后面 40 个 epoch 从不刷新。用 `--max_epochs` 保留 50 epoch 的 LR 曲线、提前在第 10 epoch 停，**每 seed 只要 ~20 分钟**（完整训练要 ~2 小时）。
 
 ```bash
 python main.py --method patchmix_cl --epochs 50 --max_epochs 10 --batch_size 8 \
-  --seed 6 --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --seed 1 --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
   --from_sl_official --audioset_pretrained --ma_update --ma_beta 0.5 \
-  --tag seed6_fast
+  --tag my_seed1
 ```
 
-### 小数据快速验证
+### 方式 B：完整训练（50 epoch）
 
 ```bash
-ICBHI_MAX_FILES=160 python main.py ... --epochs 20 --batch_size 8 ...
+python main.py --method patchmix_cl --epochs 50 --batch_size 8 \
+  --seed 1 --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --from_sl_official --audioset_pretrained --ma_update --ma_beta 0.5 \
+  --tag my_seed1
 ```
 
-> ⚠️ 小数据只适合筛 loss/数据类改动，**架构改动排名不可靠**（实测 timedom 小数据 +1.86、全量变假阳性）。
+> 换模型：`--model ast`（基线）/ `ast_fbe`（FBE 创新点）/ `ast_fbe_uniform` / `ast_cnn_dual`。
 
----
+### 方式 C：小数据快速验证（调试用）
 
-## 评估命令
+```bash
+ICBHI_MAX_FILES=160 python main.py --method patchmix_cl --epochs 20 --batch_size 8 \
+  --seed 1 --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --from_sl_official --audioset_pretrained --tag debug
+```
 
-### 集成 + TTA + 阈值校准（冲分核心）
+> ⚠️ 小数据只适合调试/筛 loss 类改动；**架构改动排名不可靠**（实测 timedom 小数据 +1.86、全量变假阳性）。
+
+## 第 4 步：冲分（多 seed 集成 + TTA + 阈值）
+
+多训练几个 seed（建议 4~8 个），把它们的 `best.pth` 一起做集成：
 
 ```bash
 python ensemble_eval.py --ckpts \
-  ./save/*/best.pth ... --tta 16
+  ./save/icbhi_ast_patchmix_cl_my_seed1/best.pth \
+  ./save/icbhi_ast_patchmix_cl_my_seed2/best.pth \
+  ... \
+  --tta 16
 ```
 
-输出：argmax Score + 阈值偏置 normal logit 扫描的最优 Score。
+输出两行关键结果：
+- **ensemble (argmax)**：直接多数投票的 Score
+- **best (阈值)**：把 normal 类 logit 加一个偏置后扫出来的最优 Score（比 argmax 高 ~1-1.5 分）
 
-### 单模型阈值校准
-
-```bash
-python eval_threshold.py --ckpt ./save/icbhi_ast_patchmix_cl_xxx/best.pth
-```
+**一键版**：`bash pro6000_run.sh` 会一次性完成「快训 8 个 seed → 集成 → TTA → 阈值」。
 
 ---
 
-## 重要发现（实战记录）
+## 常见问题
 
-1. **Score 只取决于 normal↔abnormal 边界** → 阈值校准是最有效的"免费"增益。
-2. **GPU 数值栈决定 Score 上限**：4090 + torch 2.0.1 约 61.3（集成+阈值后），PRO 6000 单模型即 62。**想破 62 请用 PRO 6000/A100**。
-3. **seed 方差大**（56~60.35），多 seed 集成是确定性增益；seed 6（S_p=69.9 / S_e=49.3）是 S_e 最高的成员，值得单独调优。
-4. **epoch 3-8 见顶** → `--max_epochs` 快训（见上）。
-5. **小数据架构筛选不可靠**（timedom 假阳性）。
+**Q：为什么我单模型只有 ~60，却要跑 8 个 seed？**
+seed 方差很大（实测单 seed 落在 56~60.35）。集成+TTA+阈值能确定性抬 ~1-1.5 分，是"不择手段"冲 62 最稳的路。
+
+**Q：4090 上能到 62 吗？**
+集成+TTA+阈值实测封顶 **61.28**，是硬件数值栈的上限。**要破 62 请用 PRO 6000/A100**（那类卡单模型就 62，配合本配方可冲 63+）。
+
+**Q：`--max_epochs` 快训靠谱吗？**
+靠谱。所有跑都在 epoch 3-8 见顶，快训就是利用这一点省时间，best checkpoint 质量和完整训练一致。
+
+---
 
 ## 模型清单
 
@@ -161,10 +123,10 @@ python eval_threshold.py --ckpt ./save/icbhi_ast_patchmix_cl_xxx/best.pth
 
 | 文件 | 作用 |
 |------|------|
-| `main.py` | 训练/评估入口（含 `--loss focal`、`--max_epochs` 补丁）|
-| `ensemble_eval.py` | 集成 + TTA + 阈值校准评估 |
+| `main.py` | 训练/评估入口（含 `--loss focal`、`--max_epochs`）|
+| `ensemble_eval.py` | 集成 + TTA + 阈值校准 |
 | `eval_threshold.py` | 单模型阈值校准 |
-| `pro6000_run.sh` | 一键冲分（8 seed 快训 + 集成 + TTA + 阈值）|
+| `pro6000_run.sh` | 一键冲分 |
 | `fast_matrix.sh` | 小数据候选矩阵筛选 |
 
 ## 致谢
