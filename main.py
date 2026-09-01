@@ -24,7 +24,7 @@ from util.augmentation import SpecAugment
 from util.misc import adjust_learning_rate, warmup_learning_rate, set_optimizer, update_moving_average
 from util.misc import AverageMeter, accuracy, save_model, update_json
 from models import get_backbone_class, Projector
-from method import PatchMixLoss, PatchMixConLoss
+from method import PatchMixLoss, PatchMixConLoss, FocalLoss
 
 
 def parse_args():
@@ -46,6 +46,8 @@ def parse_args():
     # optimization
     parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--epochs', type=int, default=400)
+    parser.add_argument('--max_epochs', type=int, default=None,
+                        help='stop training early; LR schedule still follows --epochs (keep high LR profile)')
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--lr_decay_epochs', type=str, default='120,160')
     parser.add_argument('--lr_decay_rate', type=float, default=0.1)
@@ -133,6 +135,10 @@ def parse_args():
                         help='pretrained ckpt version of SSAST model')
 
     parser.add_argument('--method', type=str, default='ce')
+    parser.add_argument('--loss', type=str, default='ce', choices=['ce', 'focal'],
+                        help='supervised classification loss (ce / focal)')
+    parser.add_argument('--focal_gamma', type=float, default=2.0,
+                        help='gamma for focal loss')
     # Patch-Mix CL loss
     parser.add_argument('--proj_dim', type=int, default=768)
     parser.add_argument('--temperature', type=float, default=0.06)
@@ -154,7 +160,7 @@ def parse_args():
         args.model_name += '_{}'.format(args.tag)
 
     if args.method in ['patchmix', 'patchmix_cl']:
-        assert args.model in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ssast']
+        assert args.model in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ast_cnn_dual', 'ssast']
     
     args.save_folder = os.path.join(args.save_dir, args.model_name)
     if not os.path.isdir(args.save_folder):
@@ -241,7 +247,7 @@ def set_loader(args):
 
 def set_model(args):
     kwargs = {}
-    if args.model in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform']:
+    if args.model in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ast_cnn_dual']:
         kwargs['input_fdim'] = int(args.h * args.resz)
         kwargs['input_tdim'] = int(args.w * args.resz)
         kwargs['label_dim'] = args.n_cls
@@ -261,19 +267,23 @@ def set_model(args):
         kwargs['mix_beta'] = args.mix_beta  # for Patch-MixCL
 
     model = get_backbone_class(args.model)(**kwargs)
-    classifier = nn.Linear(model.final_feat_dim, args.n_cls) if args.model not in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ssast'] else deepcopy(model.mlp_head)
+    classifier = nn.Linear(model.final_feat_dim, args.n_cls) if args.model not in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ast_cnn_dual', 'ssast'] else deepcopy(model.mlp_head)
 
     if not args.weighted_loss:
         weights = None
-        criterion = nn.CrossEntropyLoss()
     else:
         weights = torch.tensor(args.class_nums, dtype=torch.float32)
         weights = 1.0 / (weights / weights.sum())
         weights /= weights.sum()
-        
-        criterion = nn.CrossEntropyLoss(weight=weights)
 
-    if args.model not in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ssast'] and args.from_sl_official:
+    if args.loss == 'ce':
+        criterion = nn.CrossEntropyLoss(weight=weights)
+    elif args.loss == 'focal':
+        criterion = FocalLoss(gamma=args.focal_gamma, alpha=weights)
+    else:
+        raise NotImplementedError('unsupported --loss: {}'.format(args.loss))
+
+    if args.model not in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ast_cnn_dual', 'ssast'] and args.from_sl_official:
         model.load_sl_official_weights()
         print('pretrained model loaded from PyTorch ImageNet-pretrained')
 
@@ -513,6 +523,9 @@ def main():
     if not args.eval:
         print('Training for {} epochs on {} dataset'.format(args.epochs, args.dataset))
         for epoch in range(args.start_epoch, args.epochs+1):
+            if args.max_epochs is not None and epoch > args.max_epochs:
+                print('Stopped early at max_epochs={} (LR schedule still follows {}).'.format(args.max_epochs, args.epochs))
+                break
             adjust_learning_rate(args, optimizer, epoch)
 
             # train for one epoch

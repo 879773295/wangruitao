@@ -27,7 +27,7 @@ class PatchMixConLoss(nn.Module):
         if args.negative_pair == 'diff_label':
             labels_a = labels_a.contiguous().view(-1, 1)
             logits_mask = torch.ne(labels_a, labels_a.T).cuda() + (mask_a.bool() + mask_b.bool())
-            exp_logits *= logits_mask.float()
+            exp_logits = exp_logits * logits_mask.float()
 
         log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
 
