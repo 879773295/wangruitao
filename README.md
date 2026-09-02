@@ -6,14 +6,15 @@
 
 ---
 
-## 总览：一共 4 步
+## 总览：一共 5 步
 
 | 步骤 | 做什么 | 大概耗时 |
 |---|------|---------|
 | **① 装环境** | 建 conda 环境，装 torch 2.0.1 | 10 分钟 |
 | **② 放数据** | ICBHI 数据集放入 `data/` | - |
-| **③ 训练** | 训练模型（建议快训）| 每 seed ~20 分钟 |
-| **④ 冲分** | 多 seed 集成 + TTA + 阈值校准 | ~30 分钟 |
+| **③ 训练基线** | 训练 PatchMixCL 模型（S_e 高）| 每 seed ~20 分钟 |
+| **④ 训练 SupCon** | 训练 SupCon 模型（S_p 高）| 每 seed ~20 分钟 |
+| **⑤ 权重融合** | 平均两个模型的权重，得到融合模型 | 1 分钟 |
 
 ---
 
@@ -40,9 +41,9 @@ pip install timm==0.4.5 librosa numpy==1.24.4 pandas nlpaug wget tqdm cmapy open
 data/icbhi_dataset/audio_test_data/
 ```
 
-## 第 3 步：训练
+## 第 3 步：训练基线模型（PatchMixCL）
 
-先选训练方式，再跑对应命令。
+基线使用 InfoNCE 对比损失，对异常区域更敏感（S_e 高）。
 
 ### 方式 A：快训（推荐）
 
@@ -76,7 +77,61 @@ ICBHI_MAX_FILES=160 python main.py --method patchmix_cl --epochs 20 --batch_size
 
 > ⚠️ 小数据只适合调试/筛 loss 类改动；**架构改动排名不可靠**（实测 timedom 小数据 +1.86、全量变假阳性）。
 
-## 第 4 步：冲分（多 seed 集成 + TTA + 阈值）
+## 第 4 步：训练 SupCon 模型
+
+SupCon 使用监督对比损失，直接用类别标签，对正常类更聚焦（S_p 高）。
+
+### 快训（推荐）
+
+```bash
+python main.py --method patchmix_cl --use_supcon --epochs 50 --max_epochs 10 --batch_size 8 \
+  --seed 1 --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --from_sl_official --audioset_pretrained --ma_update --ma_beta 0.5 \
+  --tag supcon_seed1
+```
+
+**关键参数**：`--use_supcon` 启用 SupCon 损失
+
+### 完整训练（50 epoch）
+
+```bash
+python main.py --method patchmix_cl --use_supcon --epochs 50 --batch_size 8 \
+  --seed 1 --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --from_sl_official --audioset_pretrained --ma_update --ma_beta 0.5 \
+  --tag supcon_seed1
+```
+
+## 第 5 步：权重融合
+
+把基线和 SupCon 的权重平均，得到一个融合模型。
+
+### 运行融合脚本
+
+```bash
+python model_fusion.py
+```
+
+**脚本逻辑**：
+1. 加载基线模型权重
+2. 加载 SupCon 模型权重
+3. 平均权重（α=0.5）
+4. 保存融合模型到 `save/fused_baseline_supcon_alpha0.5.pth`
+
+**融合公式**：`融合权重 = 0.5 × 基线权重 + 0.5 × SupCon权重`
+
+### 评估融合模型
+
+```bash
+python ensemble_eval.py --ckpts ./save/fused_baseline_supcon_alpha0.5.pth --tta 0
+```
+
+**预期结果**（4090）：
+- Score: 61.29（+0.94 vs 基线）
+- S_p: 72.45, S_e: 50.13
+
+---
+
+## 第 6 步：冲分（可选，多 seed 集成 + TTA + 阈值）
 
 多训练几个 seed（建议 4~8 个），把它们的 `best.pth` 一起做集成：
 
