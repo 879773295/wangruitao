@@ -129,6 +129,12 @@ seed 方差很大（实测单 seed 落在 56~60.35）。集成+TTA+阈值能确�
 | `pro6000_run.sh` | 一键冲分 |
 | `fast_matrix.sh` | 小数据候选矩阵筛选 |
 
+## 训练流程详解
+
+完整的训练流程（基线 + SupCon + 权重融合 + 评估）见：[docs/TRAINING_PIPELINE.md](docs/TRAINING_PIPELINE.md)
+
+---
+
 ## 致谢
 
 基于 [Patch-Mix Contrastive Learning with Audio Spectrogram Transformer on Respiratory Sound Classification](https://arxiv.org/abs/2305.14032)（Sangmin Bae et al., INTERSPEECH 2023）的代码实现。
