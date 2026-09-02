@@ -24,7 +24,7 @@ from util.augmentation import SpecAugment
 from util.misc import adjust_learning_rate, warmup_learning_rate, set_optimizer, update_moving_average
 from util.misc import AverageMeter, accuracy, save_model, update_json
 from models import get_backbone_class, Projector
-from method import PatchMixLoss, PatchMixConLoss, FocalLoss
+from method import PatchMixLoss, PatchMixConLoss, PatchMixSupConLoss, FocalLoss
 
 
 def parse_args():
@@ -139,6 +139,10 @@ def parse_args():
                         help='supervised classification loss (ce / focal)')
     parser.add_argument('--focal_gamma', type=float, default=2.0,
                         help='gamma for focal loss')
+    parser.add_argument('--label_smoothing', type=float, default=0.0,
+                        help='label smoothing for CE loss (0.0=off, 0.1=recommended)')
+    parser.add_argument('--use_supcon', action='store_true',
+                        help='use Supervised Contrastive Loss instead of PatchMixConLoss')
     # Patch-Mix CL loss
     parser.add_argument('--proj_dim', type=int, default=768)
     parser.add_argument('--temperature', type=float, default=0.06)
@@ -277,7 +281,7 @@ def set_model(args):
         weights /= weights.sum()
 
     if args.loss == 'ce':
-        criterion = nn.CrossEntropyLoss(weight=weights)
+        criterion = nn.CrossEntropyLoss(weight=weights, label_smoothing=args.label_smoothing)
     elif args.loss == 'focal':
         criterion = FocalLoss(gamma=args.focal_gamma, alpha=weights)
     else:
@@ -316,7 +320,11 @@ def set_model(args):
     elif args.method == 'patchmix':
         criterion = [criterion.cuda(), PatchMixLoss(criterion=criterion).cuda()]
     elif args.method == 'patchmix_cl':
-        criterion = [criterion.cuda(), PatchMixConLoss(temperature=args.temperature).cuda()]
+        if args.use_supcon:
+            print('Using Supervised Contrastive Loss (SupCon)')
+            criterion = [criterion.cuda(), PatchMixSupConLoss(temperature=args.temperature).cuda()]
+        else:
+            criterion = [criterion.cuda(), PatchMixConLoss(temperature=args.temperature).cuda()]
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
@@ -372,19 +380,26 @@ def train(train_loader, model, classifier, projector, criterion, optimizer, epoc
                 output = classifier(features)
                 loss = criterion[0](output, labels)
 
-                if args.target_type == 'grad_block':
-                    proj1 = deepcopy(features.detach())
-                elif args.target_type == 'grad_flow':
-                    proj1 = features
-                elif args.target_type == 'project_block':
-                    proj1 = deepcopy(projector(features).detach())
-                elif args.target_type == 'project_flow':
+                # 分支：使用 SupCon 还是 PatchMixConLoss
+                if args.use_supcon:
+                    # SupCon: 直接用原图特征做对比学习
                     proj1 = projector(features)
+                    loss += args.alpha * criterion[1](proj1, proj1, labels)
+                else:
+                    # 原始 PatchMixConLoss
+                    if args.target_type == 'grad_block':
+                        proj1 = deepcopy(features.detach())
+                    elif args.target_type == 'grad_flow':
+                        proj1 = features
+                    elif args.target_type == 'project_block':
+                        proj1 = deepcopy(projector(features).detach())
+                    elif args.target_type == 'project_flow':
+                        proj1 = projector(features)
 
-                # use 'patchmix_cl' for augmentation
-                mix_images, labels_a, labels_b, lam, index = model(images, y=labels, patch_mix=True, time_domain=args.time_domain)
-                proj2 = projector(mix_images)
-                loss += args.alpha * criterion[1](proj1, proj2, labels, labels_b, lam, index, args)
+                    # use 'patchmix_cl' for augmentation
+                    mix_images, labels_a, labels_b, lam, index = model(images, y=labels, patch_mix=True, time_domain=args.time_domain)
+                    proj2 = projector(mix_images)
+                    loss += args.alpha * criterion[1](proj1, proj2, labels, labels_b, lam, index, args)
 
         losses.update(loss.item(), bsz)
         [acc1], _ = accuracy(output[:bsz], labels, topk=(1,))
