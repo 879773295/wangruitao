@@ -43,7 +43,7 @@ data/icbhi_dataset/audio_test_data/
 
 ## 第 3 步：训练基线模型（PatchMixCL）
 
-基线使用 InfoNCE 对比损失，对异常区域更敏感（S_e 高）。
+基线使用 InfoNCE 对比损失，对正常类更聚焦（S_p 高）。
 
 ### 方式 A：快训（推荐）
 
@@ -79,7 +79,7 @@ ICBHI_MAX_FILES=160 python main.py --method patchmix_cl --epochs 20 --batch_size
 
 ## 第 4 步：训练 SupCon 模型
 
-SupCon 使用监督对比损失，直接用类别标签，对正常类更聚焦（S_p 高）。
+SupCon 使用监督对比损失，直接用类别标签，对异常类更敏感（S_e 高）。
 
 ### 快训（推荐）
 
