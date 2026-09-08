@@ -60,6 +60,8 @@ def train(args):
     # 4. EĞİTİM DÖNGÜSÜ
     print("Train begins")
     best_score = 0.0
+    best_sp = 0.0
+    best_se = 0.0
 
     for epoch in range(args.epochs):
         model.train()
@@ -103,16 +105,19 @@ def train(args):
 
         # 计算平均 loss
         avg_loss = running_loss / len(train_loader)
-        print(f'Epoch {epoch+1}/{args.epochs}, Loss: {avg_loss:.4f}, Score: {score:.2f}')
+        print(f'Epoch {epoch+1}/{args.epochs}, Loss: {avg_loss:.4f}')
+        print(f' * S_p: {sp*100:.2f}, S_e: {se*100:.2f}, Score: {score*100:.2f}')
 
-        #
+        # 保存最优模型
         if score > best_score:
             best_score = score
+            best_sp = sp
+            best_se = se
             save_path = os.path.join(args.checkpoint_dir, "best_model.pth")
             torch.save(model.state_dict(), save_path)
-            print(f"    -->  Last best Saved ({best_score:.4f})")
+            print(f'   * New best: S_p: {sp*100:.2f}, S_e: {se*100:.2f}, Score: {score*100:.2f}')
 
-    print(f"\n Best Score: {best_score:.4f}")
+    print(f'\n * Best Score: {best_score*100:.2f} (S_p: {best_sp*100:.2f}, S_e: {best_se*100:.2f})')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train AST model with SAM for ICBHI")
