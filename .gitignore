@@ -10,4 +10,5 @@ __pycache__/
 *.pth
 *.json
 .ipynb_checkpoints/
-jupyter_notebook/
+jupyter_notebook/icbhi_ast_16k_8s_metadata.npz
+checkpoints/

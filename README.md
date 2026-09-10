@@ -66,7 +66,63 @@ python evaluate.py --model_path ./checkpoints/best_model.pth
 
 ---
 
-## 方法 2：权重融合（Score 61.29）
+## 方法 2：SAM + Band-aware Patch-Mix（最新，正在实验）
+
+**论文基础**：ICBHI-AST-SAM（arXiv:2512.22564），Score 68.10%
+
+### 创新点（4个模块，支持消融）
+
+| 模块 | 说明 | 参数 |
+|---|---|---|
+| **Same-band Patch-Mix** | 只在相同频段内交换 patch | `--use_same_band_mix` |
+| **Band Importance Estimator** | 学习频段重要性权重 | `--use_band_importance` |
+| **Frequency-weighted λ** | 按频段重要性计算混合比例 | `--use_freq_weighted_lam` |
+| **BandCL Loss** | 约束混合后频段与源样本一致 | `--use_bandcl` |
+
+### 运行步骤
+
+```bash
+cd sam_bandaware
+
+# 1. 数据预处理
+python preprocess.py
+
+# 2. 训练（全模块）
+python train.py --epochs 20 --batch_size 8 --lr 1e-5 \
+  --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl
+
+# 3. 消融实验（逐步增加模块）
+python train.py --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl  # baseline
+python train.py --use_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl  # +Same-band
+# ... 逐步增加
+python train.py --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl  # 全部
+```
+
+### 预训练权重路径
+
+**SAM 代码使用 HuggingFace 预训练权重**，会自动从缓存加载：
+- **缓存路径**：`~/.cache/huggingface/hub/models--MIT--ast-finetuned-audioset-10-10-0.4593/`
+- **模型文件**：`snapshots/<commit_hash>/model.safetensors`（331MB）
+- **config文件**：`snapshots/<commit_hash>/config.json`（27KB）
+
+**如果需要修改权重路径**，编辑 `sam_bandaware/src/model_bandaware.py`：
+```python
+# 原来（从 HuggingFace 下载）
+self.ast = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+
+# 改成用本地权重
+from models.ast import ASTModel as LocalAST
+self.ast = LocalAST(...)
+```
+
+**如果网络不通**，设置离线模式：
+```bash
+HF_HUB_OFFLINE=1 python train.py ...
+```
+
+---
+
+## 方法 3：权重融合（Score 61.29）
 
 ### 运行步骤
 
