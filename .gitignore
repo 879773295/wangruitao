@@ -12,3 +12,5 @@ __pycache__/
 .ipynb_checkpoints/
 jupyter_notebook/icbhi_ast_16k_8s_metadata.npz
 checkpoints/
+sam_bandaware_sprsound/sprsound_data.npz
+*.npz
