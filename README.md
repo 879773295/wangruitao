@@ -181,6 +181,152 @@ python main.py --model ast_cnn_dual --method patchmix_cl --epochs 50 --max_epoch
 
 ---
 
+## 方法 5：SAM + Band-aware Patch-Mix 用于 SPRSound 数据集
+
+**数据集**：[SPRSound](https://github.com/RSC-Toolkit/SPRSound) - 上海交大儿科呼吸音数据集
+
+**评估指标**：QLung Score = (S_p + S_e) / 2
+- S_p = Normal 类准确率
+- S_e = 异常类准确率（每个异常类正确分类到自己类别）
+
+### 实验结果
+
+| 数据集 | Score | S_p | S_e | 说明 |
+|---|---|---|---|---|
+| **SPRSound** | **75.80** | 91.47 | 60.13 | 5类分类，按患者ID划分 |
+| ICBHI (原论文) | ~63 | - | - | 4类分类 |
+
+### 数据集信息
+
+| 项目 | SPRSound |
+|---|---|
+| 类别数 | 5 (Normal, DAS, CAS, CAS&DAS, Poor Quality) |
+| 总样本数 | 1949 |
+| 患者数 | 251 |
+| 训练集 | 1503 样本 (200 患者) |
+| 测试集 | 446 样本 (51 患者) |
+| 录音时长 | 8秒 (padding/截断) |
+| 采样率 | 16kHz |
+
+### 运行步骤
+
+```bash
+# 1. 下载 SPRSound 数据集
+# 从 https://github.com/RSC-Toolkit/SPRSound 下载
+# 解压到 D:/tmp/class/SPRSound-main/
+
+# 2. 数据预处理（按患者ID划分，避免数据泄露）
+cd sam_bandaware_sprsound
+python preprocess_sprsound.py
+# 输出: sprsound_data.npz (训练集1503, 测试集446)
+
+# 3. 训练（全模块）
+python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz
+
+# 4. 测试脚本
+python test_sprsound.py
+```
+
+### 关键参数
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| num_classes | 5 | SPRSound 5类 |
+| num_bands | 4 | 频段数量 |
+| use_same_band_mix | True | Same-band Patch-Mix |
+| use_band_importance | True | Band Importance Estimator |
+| use_freq_weighted_lam | True | Frequency-weighted λ |
+| use_bandcl | True | BandCL Loss |
+| bandcl_weight | 1.0 | BandCL Loss 权重 |
+
+### 文件结构
+
+```
+sam_bandaware_sprsound/
+├── preprocess_sprsound.py     # SPRSound 数据预处理（按患者ID划分）
+├── train.py                   # 训练脚本（支持5类分类）
+├── test_sprsound.py           # 测试脚本
+├── sprsound_data.npz          # 预处理后的数据（需运行preprocess生成）
+└── src/
+    ├── dataset_npz.py         # NPZ 格式数据集加载器
+    ├── dataset_sprsound.py    # SPRSound 数据集加载器（从原始文件加载）
+    ├── model_bandaware.py     # 4个创新点模块
+    └── sam.py                 # SAM 优化器
+```
+
+### 评估方式（QLung）
+
+```python
+# QLung 评估方式：每个异常类必须正确分类到自己类别
+hits = np.diag(cm)  # 对角线 = 各类正确预测数
+counts = np.sum(cm, axis=1)  # 各类总数
+
+sp = hits[0] / counts[0]  # Normal 准确率
+se = sum(hits[1:]) / sum(counts[1:])  # 异常准确率（严格）
+score = (sp + se) / 2
+```
+
+**注意**：此评估方式比宽松评估（异常→任何异常类算对）更严格，Score 更低但更真实。
+
+---
+
+## BandCL Loss 公式
+
+**Band-level Contrastive Consistency Loss（频段级对比一致性损失）**
+
+### 数学定义
+
+$$
+\mathcal{L}_{BandCL} = \frac{1}{B \cdot K} \sum_{i=1}^{B} \sum_{k=1}^{K} \left\| \mathbf{f}_{i,k}^{mix} - \mathbf{f}_{i,k}^{src} \right\|_2^2
+$$
+
+其中：
+- $B$ — batch size
+- $K$ — 频段数量（默认 $K=4$）
+- $\mathbf{f}_{i,k}^{src}$ — 第 $i$ 个样本第 $k$ 个频段的原始特征
+- $\mathbf{f}_{i,k}^{mix}$ — 第 $i$ 个样本第 $k$ 个频段的混合特征
+- $\|\cdot\|_2^2$ — L2 范数的平方（MSE Loss）
+
+### 直观理解
+
+```
+原始样本 x → [Band1, Band2, Band3, Band4]  ← 特征 f_src
+                ↓ Patch-Mix
+混合样本 x' → [Band1, Band2, Band3, Band4]  ← 特征 f_mix
+
+目标：f_mix ≈ f_src（频段特征一致性约束）
+```
+
+**核心思想**：Patch-Mix 操作只交换 patch，不改变每个频段的语义内容。BandCL Loss 约束混合后每个频段的特征与原始对应频段保持一致。
+
+### 代码实现
+
+```python
+class BandCLLoss(nn.Module):
+    """Band-level Contrastive Consistency Loss"""
+    def forward(self, band_features_src, band_features_mix):
+        """
+        Args:
+            band_features_src: [B, K, D] - 原始频段特征
+            band_features_mix: [B, K, D] - 混合后频段特征
+        Returns:
+            loss: scalar
+        """
+        return F.mse_loss(band_features_mix, band_features_src, reduction='mean')
+```
+
+### 与其他损失结合
+
+```python
+# 总损失 = 分类损失 + BandCL 损失
+loss = criterion(logits, labels)  # CrossEntropy
+if args.use_bandcl:
+    bandcl_loss = model.compute_bandcl_loss(band_features_src, band_features_mix)
+    loss += args.bandcl_weight * bandcl_loss  # 默认权重 1.0
+```
+
+---
+
 ## 环境要求
 
 **必须用 torch 2.0.1 + cu118（torchaudio 2.0.2）**。实测 torch 2.2+ 会掉 ~5 分。
