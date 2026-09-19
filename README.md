@@ -225,7 +225,45 @@ python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data
 
 # 4. 测试脚本
 python test_sprsound.py
+
+# 5. 消融实验（一键运行所有5组）
+bash run_ablation.sh
+
+# 或手动运行单个实验：
+# Baseline（禁用所有创新模块）
+python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/baseline
+
+# +A（仅启用 Same-band PatchMix）
+python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/plusA
+
+# +A+B（启用 Same-band + Band Importance）
+python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/plusAB
+
+# +A+B+C（启用 Same-band + Band Importance + Freq-weighted λ）
+python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_bandcl --checkpoint_dir ./checkpoints/plusABC
+
+# Full（启用所有模块）
+python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --checkpoint_dir ./checkpoints/full
 ```
+
+### 消融实验结果（SPRSound）
+
+| 实验 | A | B | C | D | S_p | S_e | **Score** | Δ |
+|------|:---:|:---:|:---:|:---:|-----:|-----:|--------:|-----:|
+| Baseline | ✗ | ✗ | ✗ | ✗ | 90.10 | 60.78 | **75.44** | - |
+| +A | ✓ | ✗ | ✗ | ✗ | 92.49 | 59.48 | **75.98** | +0.54 |
+| +A+B | ✓ | ✓ | ✗ | ✗ | 92.83 | 56.86 | **74.85** | -0.59 |
+| +A+B+C | ✓ | ✓ | ✓ | ✗ | 91.81 | 57.52 | **74.66** | -0.78 |
+| **Full** | ✓ | ✓ | ✓ | ✓ | 89.76 | 62.09 | **75.93** | **+0.49** |
+
+> A=Same-band PatchMix, B=Band Importance, C=Freq-weighted λ, D=BandCL Loss
+
+**关键发现**：BandCL Loss (D) 主要提升 S_e（异常检出率）：60.78 → 62.09 (+1.31)
 
 ### 关键参数
 
@@ -246,6 +284,7 @@ sam_bandaware_sprsound/
 ├── preprocess_sprsound.py     # SPRSound 数据预处理（按患者ID划分）
 ├── train.py                   # 训练脚本（支持5类分类）
 ├── test_sprsound.py           # 测试脚本
+├── run_ablation.sh            # 一键运行5组消融实验
 ├── sprsound_data.npz          # 预处理后的数据（需运行preprocess生成）
 └── src/
     ├── dataset_npz.py         # NPZ 格式数据集加载器
