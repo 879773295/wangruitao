@@ -79,7 +79,9 @@ python evaluate.py --model_path ./checkpoints/best_model.pth
 | **Frequency-weighted λ** | 按频段重要性计算混合比例 | `--use_freq_weighted_lam` |
 | **BandCL Loss** | 约束混合后频段与源样本一致 | `--use_bandcl` |
 
-### 运行步骤
+---
+
+### ICBHI 数据集训练
 
 ```bash
 cd sam_bandaware
@@ -87,31 +89,115 @@ cd sam_bandaware
 # 1. 数据预处理
 python preprocess.py
 
-# 2. 训练（全模块）
-python train.py --epochs 20 --batch_size 8 --lr 1e-5 \
-  --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl
+# 2. 训练（全模块，默认参数）
+python train.py \
+  --epochs 20 \
+  --batch_size 8 \
+  --lr 1e-5 \
+  --num_classes 4 \
+  --bandcl_weight 1.0 \
+  --data_path ./icbhi_ast_16k_8s_metadata.npz
 
-# 3. 消融实验（逐步增加模块）
+# 3. 训练（调参版本）
+python train.py \
+  --epochs 20 \
+  --batch_size 8 \
+  --lr 1e-5 \
+  --num_classes 4 \
+  --bandcl_weight 0.01 \
+  --bandcl_loss_type cosine \
+  --band_importance_temperature 0.5 \
+  --mix_lam 0.6 \
+  --data_path ./icbhi_ast_16k_8s_metadata.npz
+
+# 4. 消融实验
 python train.py --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl  # baseline
-python train.py --use_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl  # +Same-band
-# ... 逐步增加
-python train.py --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl  # 全部
+python train.py --use_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl  # +A
+python train.py --use_same_band_mix --use_band_importance --no_freq_weighted_lam --no_bandcl  # +A+B
+python train.py --use_same_band_mix --use_band_importance --use_freq_weighted_lam --no_bandcl  # +A+B+C
+python train.py --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl  # Full
 ```
 
-### 调参指南（通用，适用于 ICBHI 和 SPRSound）
+---
 
-| 模块 | 参数 | 命令行 | 默认值 | 说明 |
-|------|------|--------|--------|------|
-| **PatchMix** | 混合比例 | `--mix_lam` | 0.5 | 控制 patch 交换比例 (0.3=保守, 0.7=激进) |
-| **PatchMix** | 频段数量 | `--num_bands` | 4 | 频段划分数量 |
-| **Band Importance** | 温度 | `--band_importance_temperature` | 1.0 | 控制权重分布 (低→尖锐, 高→均匀) |
-| **Band Importance** | 隐藏层比例 | `--band_importance_hidden_ratio` | 4 | MLP 隐藏层大小 |
-| **BandCL** | 损失权重 | `--bandcl_weight` | 1.0 | 损失函数权重 |
-| **BandCL** | 损失类型 | `--bandcl_loss_type` | mse | mse / l1 / cosine |
+### SPRSound 数据集训练
 
 ```bash
-# 调参示例
-python train.py --bandcl_weight 0.01 --bandcl_loss_type cosine --band_importance_temperature 0.5 --mix_lam 0.6
+cd sam_bandaware_sprsound
+
+# 1. 数据预处理（按患者ID划分，避免数据泄露）
+python preprocess_sprsound.py
+
+# 2. 训练（全模块，默认参数）
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 \
+  --batch_size 8 \
+  --lr 1e-5 \
+  --num_classes 5 \
+  --bandcl_weight 1.0 \
+  --data_path ./sprsound_data.npz
+
+# 3. 训练（调参版本）
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 \
+  --batch_size 8 \
+  --lr 1e-5 \
+  --num_classes 5 \
+  --bandcl_weight 0.01 \
+  --bandcl_loss_type cosine \
+  --band_importance_temperature 0.5 \
+  --mix_lam 0.6 \
+  --data_path ./sprsound_data.npz
+
+# 4. 消融实验（一键运行）
+bash run_ablation.sh
+
+# 5. 单独运行消融实验
+HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/baseline
+
+HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/plusA
+
+HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --checkpoint_dir ./checkpoints/full
+```
+
+---
+
+### 参数设置对照表
+
+| 参数 | ICBHI | SPRSound | 说明 |
+|------|-------|----------|------|
+| `--num_classes` | 4 | 5 | ICBHI 4类，SPRSound 5类 |
+| `--bandcl_weight` | 1.0 | 0.01~1.0 | BandCL 损失权重 |
+| `--mix_lam` | 0.5 | 0.5 | PatchMix 混合比例 |
+| `--band_importance_temperature` | 1.0 | 1.0 | 温度参数 |
+| `--bandcl_loss_type` | mse | mse/cosine | 损失函数类型 |
+| `HF_HUB_OFFLINE=1` | 可选 | 必须 | 网络不通时设置 |
+
+### 调参建议
+
+```bash
+# 实验 1：BandCL 权重
+python train.py --bandcl_weight 0.001
+python train.py --bandcl_weight 0.01
+python train.py --bandcl_weight 0.1
+
+# 实验 2：温度参数（控制 Band Importance 分布）
+python train.py --band_importance_temperature 0.5  # 更关注重要频段
+python train.py --band_importance_temperature 1.0  # 默认
+python train.py --band_importance_temperature 2.0  # 更均匀
+
+# 实验 3：混合比例
+python train.py --mix_lam 0.3  # 保守
+python train.py --mix_lam 0.5  # 默认
+python train.py --mix_lam 0.7  # 激进
+
+# 实验 4：损失函数类型
+python train.py --bandcl_loss_type mse
+python train.py --bandcl_loss_type l1
+python train.py --bandcl_loss_type cosine
 ```
 
 ### 预训练权重路径
