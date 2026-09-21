@@ -63,6 +63,10 @@ def train(args):
     print(f"  use_band_importance: {args.use_band_importance}")
     print(f"  use_freq_weighted_lam: {args.use_freq_weighted_lam}")
     print(f"  use_bandcl: {args.use_bandcl}")
+    print(f"  mix_lam: {args.mix_lam}")
+    print(f"  bandcl_weight: {args.bandcl_weight}")
+    print(f"  bandcl_loss_type: {args.bandcl_loss_type}")
+    print(f"  band_importance_temperature: {args.band_importance_temperature}")
 
     model = build_model(
         num_classes=4,
@@ -70,7 +74,10 @@ def train(args):
         use_same_band_mix=args.use_same_band_mix,
         use_band_importance=args.use_band_importance,
         use_freq_weighted_lam=args.use_freq_weighted_lam,
-        use_bandcl=args.use_bandcl
+        use_bandcl=args.use_bandcl,
+        band_importance_hidden_ratio=args.band_importance_hidden_ratio,
+        band_importance_temperature=args.band_importance_temperature,
+        bandcl_loss_type=args.bandcl_loss_type
     ).to(DEVICE)
 
     base_optimizer = torch.optim.AdamW
@@ -94,7 +101,7 @@ def train(args):
 
             # 前向传播（带创新点）
             logits, band_features_src, band_features_mix, band_importance, index = model(
-                inputs, patch_mix=True, mix_lam=0.5
+                inputs, patch_mix=True, mix_lam=args.mix_lam
             )
 
             # 分类损失
@@ -110,7 +117,7 @@ def train(args):
             optimizer.first_step(zero_grad=True)
 
             # 第二步：重新计算 loss
-            logits2, _, _, _, _ = model(inputs, patch_mix=True, mix_lam=0.5)
+            logits2, _, _, _, _ = model(inputs, patch_mix=True, mix_lam=args.mix_lam)
             loss2 = criterion(logits2, labels)
             loss2.backward()
             optimizer.second_step(zero_grad=True)
@@ -174,6 +181,12 @@ if __name__ == "__main__":
     parser.add_argument("--use_bandcl", action="store_true", default=True, help="启用 BandCL Loss")
     parser.add_argument("--no_bandcl", action="store_false", dest="use_bandcl", help="禁用 BandCL Loss")
     parser.add_argument("--bandcl_weight", type=float, default=1.0, help="BandCL Loss 权重")
+    parser.add_argument("--bandcl_loss_type", type=str, default="mse", choices=["mse", "l1", "cosine"], help="BandCL Loss 类型")
+
+    # 调参参数
+    parser.add_argument("--mix_lam", type=float, default=0.5, help="Patch-Mix 基础混合比例")
+    parser.add_argument("--band_importance_hidden_ratio", type=int, default=4, help="Band Importance MLP 隐藏层比例")
+    parser.add_argument("--band_importance_temperature", type=float, default=1.0, help="Band Importance softmax 温度")
 
     args = parser.parse_args()
     train(args)

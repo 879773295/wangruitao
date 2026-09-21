@@ -98,6 +98,22 @@ python train.py --use_same_band_mix --no_band_importance --no_freq_weighted_lam 
 python train.py --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl  # 全部
 ```
 
+### 调参指南（通用，适用于 ICBHI 和 SPRSound）
+
+| 模块 | 参数 | 命令行 | 默认值 | 说明 |
+|------|------|--------|--------|------|
+| **PatchMix** | 混合比例 | `--mix_lam` | 0.5 | 控制 patch 交换比例 (0.3=保守, 0.7=激进) |
+| **PatchMix** | 频段数量 | `--num_bands` | 4 | 频段划分数量 |
+| **Band Importance** | 温度 | `--band_importance_temperature` | 1.0 | 控制权重分布 (低→尖锐, 高→均匀) |
+| **Band Importance** | 隐藏层比例 | `--band_importance_hidden_ratio` | 4 | MLP 隐藏层大小 |
+| **BandCL** | 损失权重 | `--bandcl_weight` | 1.0 | 损失函数权重 |
+| **BandCL** | 损失类型 | `--bandcl_loss_type` | mse | mse / l1 / cosine |
+
+```bash
+# 调参示例
+python train.py --bandcl_weight 0.01 --bandcl_loss_type cosine --band_importance_temperature 0.5 --mix_lam 0.6
+```
+
 ### 预训练权重路径
 
 **SAM 代码使用 HuggingFace 预训练权重**，会自动从缓存加载：
