@@ -66,6 +66,49 @@ python evaluate.py --model_path ./checkpoints/best_model.pth
 
 ---
 
+## 方法 1.5：纯 SAM 模型（基础 Baseline）
+
+**用途**：最基础的 baseline，用于对比验证 PatchMix 和其他创新点的效果。
+
+### 运行步骤
+
+```bash
+cd sam_bandaware_sprsound
+
+# 1. 数据预处理
+python preprocess_sprsound.py
+
+# 2. 训练纯 SAM 模型
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 \
+  --batch_size 8 \
+  --lr 1e-5 \
+  --bandcl_weight 0.01 \
+  --data_path sprsound_data.npz \
+  --no_patch_mix \
+  --no_same_band_mix \
+  --no_band_importance \
+  --no_freq_weighted_lam \
+  --no_bandcl \
+  --checkpoint_dir ./checkpoints/pure_sam
+```
+
+### 参数说明
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `--no_patch_mix` | 禁用 | 不使用 PatchMix 数据增强 |
+| `--no_same_band_mix` | 禁用 | 无同频段交换 |
+| `--no_band_importance` | 禁用 | 无频段重要性学习 |
+| `--no_freq_weighted_lam` | 禁用 | 无频率加权混合比例 |
+| `--no_bandcl` | 禁用 | 无 BandCL Loss |
+
+### 预期结果
+
+纯 SAM 模型作为最基础的 baseline，预期 Score 约 **64-65**。
+
+---
+
 ## 方法 2：SAM + Band-aware Patch-Mix（最新，正在实验）
 
 **论文基础**：ICBHI-AST-SAM（arXiv:2512.22564），Score 68.10%
@@ -149,13 +192,20 @@ HF_HUB_OFFLINE=1 python train.py \
   --mix_lam 0.6 \
   --data_path ./sprsound_data.npz
 
-# 4. 消融实验（一键运行 6 组实验）
+# 4. 纯 SAM 模型（无 PatchMix，最基础的 baseline）
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 --batch_size 8 --lr 1e-5 \
+  --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_patch_mix --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
+  --checkpoint_dir ./checkpoints/pure_sam
+
+# 5. 消融实验（一键运行 6 组实验）
 bash run_ablation.sh
 
-# 5. 单独运行消融实验
-# Exp 0: 原始 SAM（无 PatchMix，无任何创新模块）
+# 6. 单独运行消融实验
+# Exp 0: 纯 SAM（无 PatchMix，无任何创新模块）
 HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
-  --no_patch_mix --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/original_sam
+  --no_patch_mix --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/pure_sam
 
 # Exp 1: SAM + PatchMix（原始 PatchMix，随机交换）
 HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
@@ -480,6 +530,203 @@ if args.use_bandcl:
     bandcl_loss = model.compute_bandcl_loss(band_features_src, band_features_mix)
     loss += args.bandcl_weight * bandcl_loss  # 默认权重 1.0
 ```
+
+---
+
+## 模型原理详解
+
+### 1. SAM（Sharpness-Aware Minimization）优化器
+
+**论文**：[Sharpness-Aware Minimization for Efficiently Improving Generalization](https://arxiv.org/abs/2010.01412)
+
+**核心思想**：传统优化器（如 Adam）只找损失值低的点，SAM 找的是**损失曲面平坦的区域**。
+
+**原理**：
+```
+传统优化：找到 loss 低的点 → 可能是尖锐的最低点 → 泛化差
+SAM：找到 loss 低且平坦的区域 → 泛化更好
+```
+
+**实现**（两步更新）：
+```python
+# 第一步：计算梯度，找扰动方向
+loss.backward()
+optimizer.first_step(zero_grad=True)
+
+# 第二步：在扰动位置重新计算梯度，更新参数
+loss2 = criterion(model(inputs), labels)
+loss2.backward()
+optimizer.second_step(zero_grad=True)
+```
+
+**参数**：
+- `rho`（默认 0.05）：扰动幅度，越大越关注平坦区域
+- `lr`（默认 1e-5）：学习率，SAM 需要更小的学习率
+
+---
+
+### 2. PatchMix 数据增强
+
+**论文**：[Patch-Mix Contrastive Learning for Audio-Visual Retrieval](https://arxiv.org/abs/2305.14032)（INTERSPEECH 2023）
+
+**核心思想**：在 patch 级别混合样本，增加数据多样性。
+
+**原理**：
+```
+样本 A: [p1, p2, p3, p4, p5, p6, p7, p8]
+样本 B: [p1, p2, p3, p4, p5, p6, p7, p8]
+混合（随机交换）: [A1, B2, A3, B4, A5, B6, A7, B8]
+```
+
+**作用**：
+- 增加训练数据多样性
+- 防止过拟合
+- 提升模型泛化能力
+
+---
+
+### 3. Same-band PatchMix（创新点 A）
+
+**核心思想**：只在**相同频段**内交换 patch，避免跨频段混合导致的语义混乱。
+
+**原理**：
+```
+原始 PatchMix（随机交换）：
+  低频 patch 可能和高频 patch 交换 → 语义混乱
+
+Same-band PatchMix（同频段交换）：
+  频段1 (低频): [p1, p2] → 只和频段1内交换
+  频段2:        [p3, p4] → 只和频段2内交换
+  频段3:        [p5, p6] → 只和频段3内交换
+  频段4 (高频): [p7, p8] → 只和频段4内交换
+```
+
+**作用**：
+- 保持频段内的语义一致性
+- 避免跨频段混合导致的特征混乱
+- 更符合音频信号的物理特性
+
+---
+
+### 4. Band Importance Estimator（创新点 B）
+
+**核心思想**：学习每个频段的重要性权重，让模型关注更有区分度的频段。
+
+**原理**：
+```python
+class BandImportanceEstimator(nn.Module):
+    def __init__(self, embed_dim=768, num_bands=4, hidden_ratio=4, temperature=1.0):
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim // hidden_ratio),
+            nn.ReLU(),
+            nn.Linear(embed_dim // hidden_ratio, 1),
+        )
+        self.temperature = temperature
+
+    def forward(self, band_features):
+        # band_features: [B, num_bands, D]
+        importance_scores = self.mlp(band_features)  # [B, num_bands, 1]
+        importance_scores = importance_scores.squeeze(-1) / self.temperature
+        band_importance = F.softmax(importance_scores, dim=-1)  # [B, num_bands]
+        return band_importance
+```
+
+**作用**：
+- 自动学习哪些频段对分类更重要
+- 高频段（病理特征）可能比低频段更重要
+- 为后续的频率加权提供权重
+
+**可调参数**：
+- `temperature`：控制权重分布的平滑度
+  - 值小 → 权重分布更尖锐（更关注重要频段）
+  - 值大 → 权重分布更平滑（更均匀）
+- `hidden_ratio`：MLP 隐藏层大小
+
+---
+
+### 5. Frequency-weighted λ（创新点 C）
+
+**核心思想**：根据频段重要性动态调整 PatchMix 的混合比例。
+
+**原理**：
+```python
+# 基础混合比例
+mix_lam = 0.5
+
+# 用 Band Importance 加权
+band_mask_ratio = torch.ones(num_bands) * mix_lam
+lam = (band_importance * band_mask_ratio).sum() / band_importance.sum()
+```
+
+**作用**：
+- 重要频段保留更多原始信息
+- 次要频段可以更多混合
+- 自适应调整混合策略
+
+**示例**：
+```
+频段重要性：[0.1, 0.2, 0.3, 0.4]  （高频更重要）
+基础 mix_lam：0.5
+
+加权后：
+  频段1: 混合比例 = 0.5 * 0.1 = 0.05（保留 95%）
+  频段2: 混合比例 = 0.5 * 0.2 = 0.10（保留 90%）
+  频段3: 混合比例 = 0.5 * 0.3 = 0.15（保留 85%）
+  频段4: 混合比例 = 0.5 * 0.4 = 0.20（保留 80%）
+```
+
+---
+
+### 6. BandCL Loss（创新点 D）
+
+**论文基础**：Band-level Contrastive Consistency Loss
+
+**核心思想**：约束 PatchMix 后每个频段的特征与原始频段特征保持一致。
+
+**原理**：
+```
+原始样本 x → [Band1, Band2, Band3, Band4]  ← 特征 f_src
+                ↓ Patch-Mix
+混合样本 x' → [Band1, Band2, Band3, Band4]  ← 特征 f_mix
+
+目标：f_mix ≈ f_src（频段特征一致性约束）
+```
+
+**公式**：
+$$\mathcal{L}_{BandCL} = \frac{1}{B \cdot K} \sum_{i=1}^{B} \sum_{k=1}^{K} \left\| \mathbf{f}_{i,k}^{mix} - \mathbf{f}_{i,k}^{src} \right\|_2^2$$
+
+**代码实现**：
+```python
+class BandCLLoss(nn.Module):
+    def __init__(self, loss_type='mse'):
+        self.loss_type = loss_type
+
+    def forward(self, band_features_src, band_features_mix):
+        if self.loss_type == 'mse':
+            return F.mse_loss(band_features_mix, band_features_src)
+        elif self.loss_type == 'cosine':
+            cos_sim = F.cosine_similarity(band_features_mix, band_features_src, dim=-1)
+            return (1 - cos_sim).mean()
+```
+
+**作用**：
+- 防止 PatchMix 破坏频段内的语义信息
+- 确保混合后的特征仍然有意义
+- 提升模型的鲁棒性
+
+**可调参数**：
+- `bandcl_weight`：损失权重（默认 1.0）
+- `bandcl_loss_type`：损失类型（mse/l1/cosine）
+
+---
+
+## 模型对比总结
+
+| 模型 | Score | 特点 | 适用场景 |
+|------|-------|------|----------|
+| **纯 SAM** | ~64 | 优化器改进，泛化好 | 基线模型 |
+| **SAM + PatchMix** | ~75 | 数据增强 | 数据量少时 |
+| **SAM Band-aware** | ~76 | 频段感知 + 自适应混合 | 追求最优性能 |
 
 ---
 
