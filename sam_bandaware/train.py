@@ -99,25 +99,35 @@ def train(args):
         for inputs, labels, _ in progress_bar:
             inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
 
-            # 前向传播（带创新点）
-            logits, band_features_src, band_features_mix, band_importance, index = model(
-                inputs, patch_mix=True, mix_lam=args.mix_lam
-            )
+            # 前向传播
+            if args.use_patch_mix:
+                # PatchMix 模式（带创新点）
+                logits, band_features_src, band_features_mix, band_importance, index = model(
+                    inputs, patch_mix=True, mix_lam=args.mix_lam
+                )
 
-            # 分类损失
-            loss = criterion(logits, labels)
+                # 分类损失
+                loss = criterion(logits, labels)
 
-            # 创新点 4：BandCL Loss（可选）
-            if args.use_bandcl:
-                bandcl_loss = model.compute_bandcl_loss(band_features_src, band_features_mix)
-                loss += args.bandcl_weight * bandcl_loss
+                # 创新点 4：BandCL Loss（可选）
+                if args.use_bandcl:
+                    bandcl_loss = model.compute_bandcl_loss(band_features_src, band_features_mix)
+                    loss += args.bandcl_weight * bandcl_loss
+            else:
+                # 原始 SAM 模式（无 PatchMix）
+                outputs = model(inputs, patch_mix=False)
+                logits = outputs[0]
+                loss = criterion(logits, labels)
 
             # SAM 两步更新
             loss.backward()
             optimizer.first_step(zero_grad=True)
 
             # 第二步：重新计算 loss
-            logits2, _, _, _, _ = model(inputs, patch_mix=True, mix_lam=args.mix_lam)
+            if args.use_patch_mix:
+                logits2, _, _, _, _ = model(inputs, patch_mix=True, mix_lam=args.mix_lam)
+            else:
+                logits2 = model(inputs, patch_mix=False)[0]
             loss2 = criterion(logits2, labels)
             loss2.backward()
             optimizer.second_step(zero_grad=True)
@@ -172,6 +182,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_bands", type=int, default=4, help="频段数量")
 
     # 消融实验参数
+    parser.add_argument("--use_patch_mix", action="store_true", default=True, help="启用 Patch-Mix（基础数据增强）")
+    parser.add_argument("--no_patch_mix", action="store_false", dest="use_patch_mix", help="禁用 Patch-Mix（原始 SAM）")
     parser.add_argument("--use_same_band_mix", action="store_true", default=True, help="启用 Same-band Patch-Mix")
     parser.add_argument("--no_same_band_mix", action="store_false", dest="use_same_band_mix", help="禁用 Same-band Patch-Mix")
     parser.add_argument("--use_band_importance", action="store_true", default=True, help="启用 Band Importance Estimator")

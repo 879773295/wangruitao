@@ -23,13 +23,14 @@ from transformers import ASTModel
 
 class BandImportanceEstimator(nn.Module):
     """频段重要性估计器"""
-    def __init__(self, embed_dim=768, num_bands=4):
+    def __init__(self, embed_dim=768, num_bands=4, hidden_ratio=4, temperature=1.0):
         super().__init__()
         self.num_bands = num_bands
+        self.temperature = temperature
         self.mlp = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim // 4),
+            nn.Linear(embed_dim, embed_dim // hidden_ratio),
             nn.ReLU(),
-            nn.Linear(embed_dim // 4, 1),
+            nn.Linear(embed_dim // hidden_ratio, 1),
         )
 
     def forward(self, band_features):
@@ -40,15 +41,16 @@ class BandImportanceEstimator(nn.Module):
             band_importance: [B, num_bands]
         """
         importance_scores = self.mlp(band_features)  # [B, num_bands, 1]
-        importance_scores = importance_scores.squeeze(-1)  # [B, num_bands]
+        importance_scores = importance_scores.squeeze(-1) / self.temperature  # [B, num_bands]
         band_importance = F.softmax(importance_scores, dim=-1)  # [B, num_bands]
         return band_importance
 
 
 class BandCLLoss(nn.Module):
     """Band-level Contrastive Consistency Loss"""
-    def __init__(self):
+    def __init__(self, loss_type='mse'):
         super().__init__()
+        self.loss_type = loss_type
 
     def forward(self, band_features_src, band_features_mix):
         """
@@ -58,8 +60,16 @@ class BandCLLoss(nn.Module):
         Returns:
             loss: scalar
         """
-        mse_loss = F.mse_loss(band_features_mix, band_features_src, reduction='mean')
-        return mse_loss
+        if self.loss_type == 'mse':
+            return F.mse_loss(band_features_mix, band_features_src, reduction='mean')
+        elif self.loss_type == 'l1':
+            return F.l1_loss(band_features_mix, band_features_src, reduction='mean')
+        elif self.loss_type == 'cosine':
+            # 余弦相似度损失（1 - cosine_similarity）
+            cos_sim = F.cosine_similarity(band_features_mix, band_features_src, dim=-1)
+            return (1 - cos_sim).mean()
+        else:
+            raise ValueError(f"Unknown loss type: {self.loss_type}")
 
 
 class CustomASTBandAware(nn.Module):
@@ -74,7 +84,9 @@ class CustomASTBandAware(nn.Module):
     """
     def __init__(self, num_classes=4, num_bands=4,
                  use_same_band_mix=True, use_band_importance=True,
-                 use_freq_weighted_lam=True, use_bandcl=True):
+                 use_freq_weighted_lam=True, use_bandcl=True,
+                 band_importance_hidden_ratio=4, band_importance_temperature=1.0,
+                 bandcl_loss_type='mse'):
         super().__init__()
         # AST 模型（HuggingFace）
         self.ast = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
@@ -96,12 +108,14 @@ class CustomASTBandAware(nn.Module):
         if self.use_band_importance:
             self.band_importance_estimator = BandImportanceEstimator(
                 embed_dim=768,
-                num_bands=num_bands
+                num_bands=num_bands,
+                hidden_ratio=band_importance_hidden_ratio,
+                temperature=band_importance_temperature
             )
 
         # 创新点 4：BandCL Loss（可选）
         if self.use_bandcl:
-            self.bandcl_loss = BandCLLoss()
+            self.bandcl_loss = BandCLLoss(loss_type=bandcl_loss_type)
 
     def extract_band_features(self, patch_features, num_bands):
         """
@@ -255,7 +269,9 @@ class CustomASTBandAware(nn.Module):
 
 def build_model(num_classes=4, num_bands=4,
                 use_same_band_mix=True, use_band_importance=True,
-                use_freq_weighted_lam=True, use_bandcl=True):
+                use_freq_weighted_lam=True, use_bandcl=True,
+                band_importance_hidden_ratio=4, band_importance_temperature=1.0,
+                bandcl_loss_type='mse'):
     """构建模型（支持消融）"""
     model = CustomASTBandAware(
         num_classes=num_classes,
@@ -263,6 +279,9 @@ def build_model(num_classes=4, num_bands=4,
         use_same_band_mix=use_same_band_mix,
         use_band_importance=use_band_importance,
         use_freq_weighted_lam=use_freq_weighted_lam,
-        use_bandcl=use_bandcl
+        use_bandcl=use_bandcl,
+        band_importance_hidden_ratio=band_importance_hidden_ratio,
+        band_importance_temperature=band_importance_temperature,
+        bandcl_loss_type=bandcl_loss_type
     )
     return model

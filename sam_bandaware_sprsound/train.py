@@ -64,6 +64,10 @@ def train(args):
     print(f"  use_band_importance: {args.use_band_importance}")
     print(f"  use_freq_weighted_lam: {args.use_freq_weighted_lam}")
     print(f"  use_bandcl: {args.use_bandcl}")
+    print(f"  mix_lam: {args.mix_lam}")
+    print(f"  bandcl_weight: {args.bandcl_weight}")
+    print(f"  bandcl_loss_type: {args.bandcl_loss_type}")
+    print(f"  band_importance_temperature: {args.band_importance_temperature}")
 
     model = build_model(
         num_classes=args.num_classes,
@@ -71,7 +75,10 @@ def train(args):
         use_same_band_mix=args.use_same_band_mix,
         use_band_importance=args.use_band_importance,
         use_freq_weighted_lam=args.use_freq_weighted_lam,
-        use_bandcl=args.use_bandcl
+        use_bandcl=args.use_bandcl,
+        band_importance_hidden_ratio=args.band_importance_hidden_ratio,
+        band_importance_temperature=args.band_importance_temperature,
+        bandcl_loss_type=args.bandcl_loss_type
     ).to(DEVICE)
 
     base_optimizer = torch.optim.AdamW
@@ -93,25 +100,35 @@ def train(args):
         for inputs, labels in progress_bar:
             inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
 
-            # 前向传播（带创新点）
-            logits, band_features_src, band_features_mix, band_importance, index = model(
-                inputs, patch_mix=True, mix_lam=0.5
-            )
+            # 前向传播
+            if args.use_patch_mix:
+                # PatchMix 模式（带创新点）
+                logits, band_features_src, band_features_mix, band_importance, index = model(
+                    inputs, patch_mix=True, mix_lam=args.mix_lam
+                )
 
-            # 分类损失
-            loss = criterion(logits, labels)
+                # 分类损失
+                loss = criterion(logits, labels)
 
-            # 创新点 4：BandCL Loss（可选）
-            if args.use_bandcl:
-                bandcl_loss = model.compute_bandcl_loss(band_features_src, band_features_mix)
-                loss += args.bandcl_weight * bandcl_loss
+                # 创新点 4：BandCL Loss（可选）
+                if args.use_bandcl:
+                    bandcl_loss = model.compute_bandcl_loss(band_features_src, band_features_mix)
+                    loss += args.bandcl_weight * bandcl_loss
+            else:
+                # 原始 SAM 模式（无 PatchMix）
+                outputs = model(inputs, patch_mix=False)
+                logits = outputs[0]
+                loss = criterion(logits, labels)
 
             # SAM 两步更新
             loss.backward()
             optimizer.first_step(zero_grad=True)
 
             # 第二步：重新计算 loss
-            logits2, _, _, _, _ = model(inputs, patch_mix=True, mix_lam=0.5)
+            if args.use_patch_mix:
+                logits2, _, _, _, _ = model(inputs, patch_mix=True, mix_lam=args.mix_lam)
+            else:
+                logits2 = model(inputs, patch_mix=False)[0]
             loss2 = criterion(logits2, labels)
             loss2.backward()
             optimizer.second_step(zero_grad=True)
@@ -173,6 +190,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_classes", type=int, default=5, help="类别数量（ICBHI=4，SPRSound=5）")
 
     # 消融实验参数
+    parser.add_argument("--use_patch_mix", action="store_true", default=True, help="启用 Patch-Mix（基础数据增强）")
+    parser.add_argument("--no_patch_mix", action="store_false", dest="use_patch_mix", help="禁用 Patch-Mix（原始 SAM）")
     parser.add_argument("--use_same_band_mix", action="store_true", default=True, help="启用 Same-band Patch-Mix")
     parser.add_argument("--no_same_band_mix", action="store_false", dest="use_same_band_mix", help="禁用 Same-band Patch-Mix")
     parser.add_argument("--use_band_importance", action="store_true", default=True, help="启用 Band Importance Estimator")
@@ -182,6 +201,12 @@ if __name__ == "__main__":
     parser.add_argument("--use_bandcl", action="store_true", default=True, help="启用 BandCL Loss")
     parser.add_argument("--no_bandcl", action="store_false", dest="use_bandcl", help="禁用 BandCL Loss")
     parser.add_argument("--bandcl_weight", type=float, default=1.0, help="BandCL Loss 权重")
+    parser.add_argument("--bandcl_loss_type", type=str, default="mse", choices=["mse", "l1", "cosine"], help="BandCL Loss 类型")
+
+    # 新增调参参数
+    parser.add_argument("--mix_lam", type=float, default=0.5, help="Patch-Mix 基础混合比例")
+    parser.add_argument("--band_importance_hidden_ratio", type=int, default=4, help="Band Importance MLP 隐藏层比例")
+    parser.add_argument("--band_importance_temperature", type=float, default=1.0, help="Band Importance softmax 温度")
 
     args = parser.parse_args()
     train(args)

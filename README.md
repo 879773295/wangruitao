@@ -149,16 +149,31 @@ HF_HUB_OFFLINE=1 python train.py \
   --mix_lam 0.6 \
   --data_path ./sprsound_data.npz
 
-# 4. 消融实验（一键运行）
+# 4. 消融实验（一键运行 6 组实验）
 bash run_ablation.sh
 
 # 5. 单独运行消融实验
+# Exp 0: 原始 SAM（无 PatchMix，无任何创新模块）
 HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
-  --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/baseline
+  --no_patch_mix --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/original_sam
 
+# Exp 1: SAM + PatchMix（原始 PatchMix，随机交换）
+HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/patchmix
+
+# Exp 2: +A（Same-band PatchMix）
 HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
   --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/plusA
 
+# Exp 3: +A+B（Same-band + Band Importance）
+HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/plusAB
+
+# Exp 4: +A+B+C（+ Freq-weighted λ）
+HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_bandcl --checkpoint_dir ./checkpoints/plusABC
+
+# Exp 5: Full（A+B+C+D，完整 SAM Band-aware）
 HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
   --checkpoint_dir ./checkpoints/full
 ```
