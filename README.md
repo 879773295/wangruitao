@@ -203,28 +203,77 @@ HF_HUB_OFFLINE=1 python train.py \
 bash run_ablation.sh
 
 # 6. 单独运行消融实验
+
 # Exp 0: 纯 SAM（无 PatchMix，无任何创新模块）
-HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
-  --no_patch_mix --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/pure_sam
+# 基础 baseline，只用 SAM 优化器
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
+  --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --no_patch_mix \
+  --no_same_band_mix \
+  --no_band_importance \
+  --no_freq_weighted_lam \
+  --no_bandcl \
+  --checkpoint_dir ./checkpoints/pure_sam
 
-# Exp 1: SAM + PatchMix（原始 PatchMix，随机交换）
-HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
-  --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/patchmix
+# Exp 1: SAM + 原始 PatchMix（随机交换 patch）
+# 在纯 SAM 基础上添加 PatchMix 数据增强
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
+  --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --use_patch_mix \
+  --no_same_band_mix \
+  --no_band_importance \
+  --no_freq_weighted_lam \
+  --no_bandcl \
+  --checkpoint_dir ./checkpoints/patchmix
 
-# Exp 2: +A（Same-band PatchMix）
-HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
-  --no_band_importance --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/plusA
+# Exp 2: +A（Same-band PatchMix，同频段内交换 patch）
+# 用 A 替换原始 PatchMix
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
+  --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --use_patch_mix \
+  --use_same_band_mix \
+  --no_band_importance \
+  --no_freq_weighted_lam \
+  --no_bandcl \
+  --checkpoint_dir ./checkpoints/plusA
 
 # Exp 3: +A+B（Same-band + Band Importance）
-HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
-  --no_freq_weighted_lam --no_bandcl --checkpoint_dir ./checkpoints/plusAB
+# 添加 B：学习频段重要性权重
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
+  --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --use_patch_mix \
+  --use_same_band_mix \
+  --use_band_importance \
+  --no_freq_weighted_lam \
+  --no_bandcl \
+  --checkpoint_dir ./checkpoints/plusAB
 
 # Exp 4: +A+B+C（+ Freq-weighted λ）
-HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
-  --no_bandcl --checkpoint_dir ./checkpoints/plusABC
+# 添加 C：用频段重要性加权混合比例
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
+  --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --use_patch_mix \
+  --use_same_band_mix \
+  --use_band_importance \
+  --use_freq_weighted_lam \
+  --no_bandcl \
+  --checkpoint_dir ./checkpoints/plusABC
 
 # Exp 5: Full（A+B+C+D，完整 SAM Band-aware）
-HF_HUB_OFFLINE=1 python train.py --epochs 20 --batch_size 8 --lr 1e-5 --bandcl_weight 0.01 --data_path sprsound_data.npz \
+# 添加 D：BandCL Loss 约束混合后频段特征一致性
+HF_HUB_OFFLINE=1 python train.py \
+  --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
+  --bandcl_weight 0.01 --data_path sprsound_data.npz \
+  --use_patch_mix \
+  --use_same_band_mix \
+  --use_band_importance \
+  --use_freq_weighted_lam \
+  --use_bandcl \
   --checkpoint_dir ./checkpoints/full
 ```
 
