@@ -202,10 +202,90 @@ HF_HUB_OFFLINE=1 python train.py \
 # 5. 消融实验（一键运行 6 组实验）
 bash run_ablation.sh
 
-# 6. 单独运行消融实验
+# 6. 消融实验详解
 
-# Exp 0: 纯 SAM（无 PatchMix，无任何创新模块）
-# 基础 baseline，只用 SAM 优化器
+## 消融实验设计思路
+
+**基础模型**：SAM（Sharpness-Aware Minimization）优化器
+**创新点**：在 SAM 基础上逐步添加 4 个模块（A、B、C、D），验证每个模块的效果
+
+## 模块原理与作用
+
+### A = Same-band PatchMix（同频段交换 patch）
+
+**原理**：
+- 原始 PatchMix：随机交换任意位置的 patch，可能破坏频段内的语义
+- Same-band PatchMix：只在相同频段内交换 patch，保持频段语义一致性
+
+**作用**：
+- 增加数据多样性，防止过拟合
+- 保持频段内的物理意义（低频 patch 不会和高频 patch 混合）
+
+**关键参数**：
+- `--mix_lam`：混合比例（0-1），值越大保留原始信息越多
+  - 0.3：激进混合（保留 70% 原始）
+  - 0.5：默认平衡
+  - 0.7：保守混合（保留 30% 原始）
+
+### B = Band Importance Estimator（频段重要性估计器）
+
+**原理**：
+- 学习每个频段的重要性权重
+- 通过 MLP 网络自动学习哪些频段对分类更重要
+
+**作用**：
+- 自动识别重要频段（如高频病理特征）
+- 为后续频率加权提供权重依据
+
+**关键参数**：
+- `--band_importance_temperature`：温度参数，控制权重分布
+  - 0.5：更关注重要频段（权重分布更尖锐）
+  - 1.0：默认平衡
+  - 2.0：更均匀分布（权重分布更平滑）
+- `--band_importance_hidden_ratio`：MLP 隐藏层大小比例（默认 4）
+
+### C = Frequency-weighted λ（频率加权混合比例）
+
+**原理**：
+- 根据频段重要性动态调整 PatchMix 的混合比例
+- 重要频段保留更多原始信息，次要频段可以更多混合
+
+**作用**：
+- 自适应调整混合策略
+- 重要频段信息损失更少
+
+**关键参数**：
+- 继承 B 的参数（`--band_importance_temperature`）
+
+### D = BandCL Loss（频段级对比一致性损失）
+
+**原理**：
+- 约束 PatchMix 后每个频段的特征与原始频段特征保持一致
+- 使用 MSE/L1/Cosine 距离度量特征相似度
+
+**作用**：
+- 防止 PatchMix 破坏频段内的语义信息
+- 确保混合后的特征仍然有意义
+
+**关键参数**：
+- `--bandcl_weight`：损失权重（默认 1.0）
+  - 0.001：弱约束
+  - 0.01：默认平衡
+  - 0.1：强约束
+- `--bandcl_loss_type`：损失类型
+  - `mse`：均方误差（默认）
+  - `l1`：绝对误差
+  - `cosine`：余弦相似度
+
+---
+
+## 消融实验命令
+
+### Exp 0: 纯 SAM（Baseline）
+
+**配置**：SAM 优化器，无 PatchMix，无任何创新模块
+
+```bash
 HF_HUB_OFFLINE=1 python train.py \
   --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
   --bandcl_weight 0.01 --data_path sprsound_data.npz \
@@ -215,9 +295,13 @@ HF_HUB_OFFLINE=1 python train.py \
   --no_freq_weighted_lam \
   --no_bandcl \
   --checkpoint_dir ./checkpoints/pure_sam
+```
 
-# Exp 1: SAM + 原始 PatchMix（随机交换 patch）
-# 在纯 SAM 基础上添加 PatchMix 数据增强
+### Exp 1: SAM + PatchMix
+
+**配置**：在纯 SAM 基础上添加原始 PatchMix（随机交换 patch）
+
+```bash
 HF_HUB_OFFLINE=1 python train.py \
   --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
   --bandcl_weight 0.01 --data_path sprsound_data.npz \
@@ -227,9 +311,13 @@ HF_HUB_OFFLINE=1 python train.py \
   --no_freq_weighted_lam \
   --no_bandcl \
   --checkpoint_dir ./checkpoints/patchmix
+```
 
-# Exp 2: +A（Same-band PatchMix，同频段内交换 patch）
-# 用 A 替换原始 PatchMix
+### Exp 2: SAM + A
+
+**配置**：用 A（Same-band PatchMix）替换原始 PatchMix
+
+```bash
 HF_HUB_OFFLINE=1 python train.py \
   --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
   --bandcl_weight 0.01 --data_path sprsound_data.npz \
@@ -239,9 +327,13 @@ HF_HUB_OFFLINE=1 python train.py \
   --no_freq_weighted_lam \
   --no_bandcl \
   --checkpoint_dir ./checkpoints/plusA
+```
 
-# Exp 3: +A+B（Same-band + Band Importance）
-# 添加 B：学习频段重要性权重
+### Exp 3: SAM + A + B
+
+**配置**：在 A 基础上添加 B（Band Importance Estimator）
+
+```bash
 HF_HUB_OFFLINE=1 python train.py \
   --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
   --bandcl_weight 0.01 --data_path sprsound_data.npz \
@@ -251,9 +343,13 @@ HF_HUB_OFFLINE=1 python train.py \
   --no_freq_weighted_lam \
   --no_bandcl \
   --checkpoint_dir ./checkpoints/plusAB
+```
 
-# Exp 4: +A+B+C（+ Freq-weighted λ）
-# 添加 C：用频段重要性加权混合比例
+### Exp 4: SAM + A + B + C
+
+**配置**：在 A+B 基础上添加 C（Frequency-weighted λ）
+
+```bash
 HF_HUB_OFFLINE=1 python train.py \
   --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
   --bandcl_weight 0.01 --data_path sprsound_data.npz \
@@ -263,9 +359,13 @@ HF_HUB_OFFLINE=1 python train.py \
   --use_freq_weighted_lam \
   --no_bandcl \
   --checkpoint_dir ./checkpoints/plusABC
+```
 
-# Exp 5: Full（A+B+C+D，完整 SAM Band-aware）
-# 添加 D：BandCL Loss 约束混合后频段特征一致性
+### Exp 5: SAM + A + B + C + D（完整模型）
+
+**配置**：在 A+B+C 基础上添加 D（BandCL Loss）
+
+```bash
 HF_HUB_OFFLINE=1 python train.py \
   --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 5 \
   --bandcl_weight 0.01 --data_path sprsound_data.npz \
@@ -275,6 +375,20 @@ HF_HUB_OFFLINE=1 python train.py \
   --use_freq_weighted_lam \
   --use_bandcl \
   --checkpoint_dir ./checkpoints/full
+```
+
+---
+
+## 消融实验对比表
+
+| 实验 | 模型 | PatchMix | A | B | C | D | 预期效果 |
+|------|------|----------|---|---|---|---|----------|
+| Exp 0 | 纯 SAM | ❌ | ❌ | ❌ | ❌ | ❌ | Baseline |
+| Exp 1 | SAM + PatchMix | ✓ 随机 | ❌ | ❌ | ❌ | ❌ | +数据增强 |
+| Exp 2 | SAM + A | ✓ 同频段 | ✓ | ❌ | ❌ | ❌ | +频段一致性 |
+| Exp 3 | SAM + A + B | ✓ 同频段 | ✓ | ✓ | ❌ | ❌ | +频段重要性 |
+| Exp 4 | SAM + A + B + C | ✓ 同频段 | ✓ | ✓ | ✓ | ❌ | +自适应混合 |
+| Exp 5 | SAM + A + B + C + D | ✓ 同频段 | ✓ | ✓ | ✓ | ✓ | +特征约束 |
 ```
 
 ---
