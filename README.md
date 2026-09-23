@@ -459,7 +459,7 @@ HF_HUB_OFFLINE=1 python train.py ...
 ### 消融实验命令
 
 ```bash
-cd patch-mix_contrastive_learning
+cd wangruitao
 
 # Exp 0: 原版基线（无 PatchMix，无任何创新模块）
 python main.py \
