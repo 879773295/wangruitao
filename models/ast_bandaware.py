@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.cuda.amp import autocast
 import timm
-from timm.models.layers import to_2tuple
+from timm.models.layers import to_2tuple, trunc_normal_
 
 
 class PatchEmbed(nn.Module):
@@ -136,22 +136,38 @@ class ASTModelBandAware(nn.Module):
             new_proj.bias = self.v.patch_embed.proj.bias
         self.v.patch_embed.proj = new_proj
 
-        # 位置嵌入
+        # 位置嵌入（与原版模型保持一致）
         if imagenet_pretrain:
+            # get the positional embedding from deit model, skip the first two tokens (cls token and distillation token)
+            # reshape it to original 2D shape (24*24)
             new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, self.original_num_patches, self.original_embedding_dim).transpose(1, 2).reshape(1, self.original_embedding_dim, self.oringal_hw, self.oringal_hw)
+            # cut (from middle) or interpolate the second dimension of the positional embedding
             if t_dim <= self.oringal_hw:
                 new_pos_embed = new_pos_embed[:, :, :, int(self.oringal_hw / 2) - int(t_dim / 2): int(self.oringal_hw / 2) - int(t_dim / 2) + t_dim]
             else:
                 new_pos_embed = F.interpolate(new_pos_embed, size=(self.oringal_hw, t_dim), mode='bilinear')
+            # cut (from middle) or interpolate the first dimension of the positional embedding
             if f_dim <= self.oringal_hw:
                 new_pos_embed = new_pos_embed[:, :, int(self.oringal_hw / 2) - int(f_dim / 2): int(self.oringal_hw / 2) - int(f_dim / 2) + f_dim, :]
             else:
                 new_pos_embed = F.interpolate(new_pos_embed, size=(f_dim, self.oringal_hw), mode='bilinear')
-            new_pos_embed = new_pos_embed.reshape(1, self.original_embedding_dim, -1).transpose(1, 2)
-            new_pos_embed = torch.cat([self.v.pos_embed[:, :2, :], new_pos_embed], dim=1)
-            self.v.pos_embed = nn.Parameter(new_pos_embed)
+            # flatten the positional embedding
+            new_pos_embed = new_pos_embed.reshape(1, self.original_embedding_dim, num_patches).transpose(1, 2)
+            # concatenate the above positional embedding with the cls token and distillation token of the deit model
+            self.v.pos_embed = nn.Parameter(torch.cat([self.v.pos_embed[:, :2, :].detach(), new_pos_embed], dim=1))
+        else:
+            # if not use imagenet pretrained model, just randomly initialize a learnable positional embedding
+            new_pos_embed = nn.Parameter(torch.zeros(1, self.v.patch_embed.num_patches + 2, self.original_embedding_dim))
+            self.v.pos_embed = new_pos_embed
+            trunc_normal_(self.v.pos_embed, std=.02)
 
         self.v.patch_embed.num_patches = num_patches
+
+        # 分类头（与原版模型保持一致）
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(self.original_embedding_dim),
+            nn.Linear(self.original_embedding_dim, label_dim)
+        )
 
         # 创新点 B：Band Importance Estimator
         if self.use_band_importance:

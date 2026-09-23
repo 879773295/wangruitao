@@ -180,7 +180,7 @@ def parse_args():
         args.model_name += '_{}'.format(args.tag)
 
     if args.method in ['patchmix', 'patchmix_cl']:
-        assert args.model in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ast_cnn_dual', 'ssast']
+        assert args.model in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ast_cnn_dual', 'ast_bandaware', 'ssast']
     
     args.save_folder = os.path.join(args.save_dir, args.model_name)
     if not os.path.isdir(args.save_folder):
@@ -559,12 +559,14 @@ def main():
     cudnn.deterministic = True
     cudnn.benchmark = True
 
-    best_model = None
     if args.dataset == 'icbhi':
         best_acc = [0, 0, 0]  # Specificity, Sensitivity, Score
 
     train_loader, val_loader, args = set_loader(args)
     model, classifier, projector, criterion, optimizer = set_model(args)
+
+    # 初始化 best_model
+    best_model = [deepcopy(model.state_dict()), deepcopy(classifier.state_dict())]
 
     if args.resume:
         if os.path.isfile(args.resume):
