@@ -535,7 +535,7 @@ def validate(val_loader, model, classifier, criterion, args, best_acc, best_mode
                        idx + 1, len(val_loader), batch_time=batch_time,
                        loss=losses, top1=top1))
     
-    if sc > best_acc[-1] and se > 5:
+    if sc > best_acc[-1]:
         save_bool = True
         best_acc = [sp, se, sc]
         best_model = [deepcopy(model.state_dict()), deepcopy(classifier.state_dict())]
