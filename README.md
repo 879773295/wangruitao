@@ -452,6 +452,77 @@ HF_HUB_OFFLINE=1 python train.py ...
 
 ---
 
+## 方法 2.5：原版模型 + 四个消融模块（Adam 优化器，无 SAM）
+
+**用途**：验证四个消融模块在原版模型（Adam 优化器）上的效果
+
+### 消融实验命令
+
+```bash
+cd D:/tmp/class/patch-mix_contrastive_learning
+
+# Exp 0: 原版基线（无 PatchMix，无任何创新模块）
+python main.py \
+  --model ast \
+  --method ce \
+  --epochs 50 --max_epochs 10 --seed 1 \
+  --tag original_ce
+
+# Exp 1: 原版 + 原始 PatchMix（随机交换）
+python main.py \
+  --model ast \
+  --method patchmix \
+  --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
+  --epochs 50 --max_epochs 10 --seed 1 \
+  --tag original_patchmix
+
+# Exp 2: 原版 + A（Same-band PatchMix）
+python main.py \
+  --model ast_bandaware \
+  --method patchmix \
+  --use_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
+  --epochs 50 --max_epochs 10 --seed 1 \
+  --tag original_plus_A
+
+# Exp 3: 原版 + A + B（+ Band Importance）
+python main.py \
+  --model ast_bandaware \
+  --method patchmix \
+  --use_same_band_mix --use_band_importance --no_freq_weighted_lam --no_bandcl \
+  --epochs 50 --max_epochs 10 --seed 1 \
+  --tag original_plus_AB
+
+# Exp 4: 原版 + A + B + C（+ Freq-weighted λ）
+python main.py \
+  --model ast_bandaware \
+  --method patchmix \
+  --use_same_band_mix --use_band_importance --use_freq_weighted_lam --no_bandcl \
+  --epochs 50 --max_epochs 10 --seed 1 \
+  --tag original_plus_ABC
+
+# Exp 5: 原版 + A + B + C + D（完整模型）
+python main.py \
+  --model ast_bandaware \
+  --method patchmix \
+  --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl \
+  --bandcl_weight 1.0 \
+  --epochs 50 --max_epochs 10 --seed 1 \
+  --tag original_full
+```
+
+### 消融实验对比表（原版模型，Adam 优化器）
+
+| 实验 | 模型 | PatchMix | A | B | C | D | 说明 |
+|------|------|----------|---|---|---|---|------|
+| Exp 0 | 原版 AST | ❌ | ❌ | ❌ | ❌ | ❌ | 基线（无 PatchMix） |
+| Exp 1 | 原版 AST | ✓ 随机 | ❌ | ❌ | ❌ | ❌ | +原始 PatchMix |
+| Exp 2 | AST Band-aware | ✓ 同频段 | ✓ | ❌ | ❌ | ❌ | +A |
+| Exp 3 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ❌ | ❌ | +A+B |
+| Exp 4 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ✓ | ❌ | +A+B+C |
+| Exp 5 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ✓ | ✓ | +A+B+C+D |
+
+---
+
 ## 方法 3：权重融合（Score 61.29）
 
 ### 运行步骤

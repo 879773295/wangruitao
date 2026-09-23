@@ -5,6 +5,7 @@ from .ast import ASTModel
 from .ast_freq import ASTModel as ASTModelFBE  # AST + 病理频段 FBE (4 band)
 from .ast_freq_uniform import ASTModel as ASTModelUniform
 from .ast_cnn_dual import ASTModelDualCNN  # AST + 等分频段 FBE (12 band)
+from .ast_bandaware import ASTModelBandAware  # AST + 四个消融模块（A、B、C、D）
 from .ssast import SSASTModel
 from .projector import Projector
 
@@ -23,6 +24,7 @@ _backbone_class_map = {
     'ast_fbe_patho': ASTModelFBE,  # 别名，更明确
     'ast_fbe_uniform': ASTModelUniform,  # AST + 等分频段 FBE (12 band)
     'ast_cnn_dual': ASTModelDualCNN,  # AST + CNN dual channel
+    'ast_bandaware': ASTModelBandAware,  # AST + 四个消融模块（A、B、C、D）
     'ssast': SSASTModel
 }
 

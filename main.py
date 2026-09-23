@@ -125,14 +125,30 @@ def parse_args():
     parser.add_argument('--use_freq_band_embed', action='store_true',
                         help='enable Frequency Band Embedding (FBE) for AST model')
     # for SSAST
-    parser.add_argument('--ssast_task', type=str, default='ft_avgtok', 
+    parser.add_argument('--ssast_task', type=str, default='ft_avgtok',
                         help='pretraining or fine-tuning task', choices=['ft_avgtok', 'ft_cls'])
-    parser.add_argument('--fshape', type=int, default=16, 
+    parser.add_argument('--fshape', type=int, default=16,
                         help='fshape of SSAST')
-    parser.add_argument('--tshape', type=int, default=16, 
+    parser.add_argument('--tshape', type=int, default=16,
                         help='tshape of SSAST')
-    parser.add_argument('--ssast_pretrained_type', type=str, default='Patch', 
+    parser.add_argument('--ssast_pretrained_type', type=str, default='Patch',
                         help='pretrained ckpt version of SSAST model')
+
+    # for AST Band-aware（四个消融模块）
+    parser.add_argument('--num_bands', type=int, default=4, help='频段数量')
+    parser.add_argument('--use_same_band_mix', action='store_true', default=True, help='启用 Same-band PatchMix (A)')
+    parser.add_argument('--no_same_band_mix', action='store_false', dest='use_same_band_mix', help='禁用 Same-band PatchMix')
+    parser.add_argument('--use_band_importance', action='store_true', default=True, help='启用 Band Importance Estimator (B)')
+    parser.add_argument('--no_band_importance', action='store_false', dest='use_band_importance', help='禁用 Band Importance Estimator')
+    parser.add_argument('--use_freq_weighted_lam', action='store_true', default=True, help='启用 Frequency-weighted λ (C)')
+    parser.add_argument('--no_freq_weighted_lam', action='store_false', dest='use_freq_weighted_lam', help='禁用 Frequency-weighted λ')
+    parser.add_argument('--use_bandcl', action='store_true', default=True, help='启用 BandCL Loss (D)')
+    parser.add_argument('--no_bandcl', action='store_false', dest='use_bandcl', help='禁用 BandCL Loss')
+    parser.add_argument('--bandcl_weight', type=float, default=1.0, help='BandCL Loss 权重')
+    parser.add_argument('--bandcl_loss_type', type=str, default='mse', choices=['mse', 'l1', 'cosine'], help='BandCL Loss 类型')
+    parser.add_argument('--band_importance_hidden_ratio', type=int, default=4, help='Band Importance MLP 隐藏层比例')
+    parser.add_argument('--band_importance_temperature', type=float, default=1.0, help='Band Importance softmax 温度')
+    parser.add_argument('--mix_lam', type=float, default=0.5, help='PatchMix 基础混合比例')
 
     parser.add_argument('--method', type=str, default='ce')
     parser.add_argument('--loss', type=str, default='ce', choices=['ce', 'focal'],
@@ -260,6 +276,21 @@ def set_model(args):
         kwargs['mix_beta'] = args.mix_beta  # for Patch-MixCL
         if args.model in ['ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform']:
             kwargs['use_freq_band_embed'] = True
+    elif args.model == 'ast_bandaware':
+        kwargs['input_fdim'] = int(args.h * args.resz)
+        kwargs['input_tdim'] = int(args.w * args.resz)
+        kwargs['label_dim'] = args.n_cls
+        kwargs['imagenet_pretrain'] = args.from_sl_official
+        kwargs['audioset_pretrain'] = args.audioset_pretrained
+        kwargs['mix_beta'] = args.mix_beta
+        kwargs['num_bands'] = args.num_bands
+        kwargs['use_same_band_mix'] = args.use_same_band_mix
+        kwargs['use_band_importance'] = args.use_band_importance
+        kwargs['use_freq_weighted_lam'] = args.use_freq_weighted_lam
+        kwargs['use_bandcl'] = args.use_bandcl
+        kwargs['band_importance_hidden_ratio'] = args.band_importance_hidden_ratio
+        kwargs['band_importance_temperature'] = args.band_importance_temperature
+        kwargs['bandcl_loss_type'] = args.bandcl_loss_type
     elif args.model == 'ssast':
         kwargs['label_dim'] = args.n_cls
         kwargs['fshape'], kwargs['tshape'] = args.fshape, args.tshape
@@ -271,7 +302,7 @@ def set_model(args):
         kwargs['mix_beta'] = args.mix_beta  # for Patch-MixCL
 
     model = get_backbone_class(args.model)(**kwargs)
-    classifier = nn.Linear(model.final_feat_dim, args.n_cls) if args.model not in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ast_cnn_dual', 'ssast'] else deepcopy(model.mlp_head)
+    classifier = nn.Linear(model.final_feat_dim, args.n_cls) if args.model not in ['ast', 'ast_fbe', 'ast_fbe_patho', 'ast_fbe_uniform', 'ast_cnn_dual', 'ast_bandaware', 'ssast'] else deepcopy(model.mlp_head)
 
     if not args.weighted_loss:
         weights = None
@@ -371,9 +402,22 @@ def train(train_loader, model, classifier, projector, criterion, optimizer, epoc
                 loss = criterion[0](output, labels)
 
             elif args.method == 'patchmix':
-                mix_images, labels_a, labels_b, lam, index = model(images, y=labels, patch_mix=True, time_domain=args.time_domain)
-                output = classifier(mix_images)
-                loss = criterion[1](output, labels_a, labels_b, lam)
+                if args.model == 'ast_bandaware':
+                    # 带四个消融模块的 PatchMix
+                    features, labels_a, labels_b, lam, index, band_features_src, band_features_mix, band_importance = model(
+                        images, y=labels, patch_mix=True, time_domain=args.time_domain, mix_lam=args.mix_lam
+                    )
+                    output = classifier(features)
+                    loss = criterion[1](output, labels_a, labels_b, lam)
+                    # BandCL Loss（创新点 D）
+                    if args.use_bandcl:
+                        bandcl_loss = model.compute_bandcl_loss(band_features_src, band_features_mix)
+                        loss += args.bandcl_weight * bandcl_loss
+                else:
+                    # 原版 PatchMix
+                    mix_images, labels_a, labels_b, lam, index = model(images, y=labels, patch_mix=True, time_domain=args.time_domain)
+                    output = classifier(mix_images)
+                    loss = criterion[1](output, labels_a, labels_b, lam)
 
             elif args.method == 'patchmix_cl':
                 features = model(images)
@@ -397,7 +441,12 @@ def train(train_loader, model, classifier, projector, criterion, optimizer, epoc
                         proj1 = projector(features)
 
                     # use 'patchmix_cl' for augmentation
-                    mix_images, labels_a, labels_b, lam, index = model(images, y=labels, patch_mix=True, time_domain=args.time_domain)
+                    if args.model == 'ast_bandaware':
+                        mix_images, labels_a, labels_b, lam, index, band_features_src, band_features_mix, band_importance = model(
+                            images, y=labels, patch_mix=True, time_domain=args.time_domain, mix_lam=args.mix_lam
+                        )
+                    else:
+                        mix_images, labels_a, labels_b, lam, index = model(images, y=labels, patch_mix=True, time_domain=args.time_domain)
                     proj2 = projector(mix_images)
                     loss += args.alpha * criterion[1](proj1, proj2, labels, labels_b, lam, index, args)
 
