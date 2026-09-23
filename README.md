@@ -465,7 +465,7 @@ cd wangruitao
 python main.py \
   --model ast \
   --method ce \
-  --epochs 50 --max_epochs 10 --seed 1 \
+  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
   --tag original_ce
 
 # Exp 1: 原版 + 原始 PatchMix（随机交换）
@@ -473,7 +473,7 @@ python main.py \
   --model ast \
   --method patchmix \
   --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
-  --epochs 50 --max_epochs 10 --seed 1 \
+  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
   --tag original_patchmix
 
 # Exp 2: 原版 + A（Same-band PatchMix）
@@ -481,7 +481,7 @@ python main.py \
   --model ast_bandaware \
   --method patchmix \
   --use_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
-  --epochs 50 --max_epochs 10 --seed 1 \
+  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
   --tag original_plus_A
 
 # Exp 3: 原版 + A + B（+ Band Importance）
@@ -489,7 +489,7 @@ python main.py \
   --model ast_bandaware \
   --method patchmix \
   --use_same_band_mix --use_band_importance --no_freq_weighted_lam --no_bandcl \
-  --epochs 50 --max_epochs 10 --seed 1 \
+  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
   --tag original_plus_AB
 
 # Exp 4: 原版 + A + B + C（+ Freq-weighted λ）
@@ -497,7 +497,7 @@ python main.py \
   --model ast_bandaware \
   --method patchmix \
   --use_same_band_mix --use_band_importance --use_freq_weighted_lam --no_bandcl \
-  --epochs 50 --max_epochs 10 --seed 1 \
+  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
   --tag original_plus_ABC
 
 # Exp 5: 原版 + A + B + C + D（完整模型）
@@ -506,7 +506,7 @@ python main.py \
   --method patchmix \
   --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl \
   --bandcl_weight 1.0 \
-  --epochs 50 --max_epochs 10 --seed 1 \
+  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
   --tag original_full
 ```
 
