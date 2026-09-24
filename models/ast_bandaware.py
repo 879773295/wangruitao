@@ -154,18 +154,16 @@ class ASTModelBandAware(nn.Module):
             self.t_dim = t_dim
 
             # 位置嵌入处理（AudioSet 模型）
-            # 使用实际的 pos_embed 形状，不硬编码维度
-            pos_num_patches = self.v.pos_embed.shape[1] - 2  # 去掉 cls 和 dist token
-            pos_hw = int(pos_num_patches ** 0.5)
+            # AudioSet 预训练模型：1212 patches = 12 freq × 101 time
             embed_dim = self.v.pos_embed.shape[2]
-            new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, pos_num_patches, embed_dim).transpose(1, 2).reshape(1, embed_dim, pos_hw, pos_hw)
-            if t_dim <= pos_hw:
-                new_pos_embed = new_pos_embed[:, :, :, int(pos_hw / 2) - int(t_dim / 2): int(pos_hw / 2) - int(t_dim / 2) + t_dim]
+            new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, 1212, embed_dim).transpose(1, 2).reshape(1, embed_dim, 12, 101)
+            if t_dim < 101:
+                new_pos_embed = new_pos_embed[:, :, :, 50 - int(t_dim/2): 50 - int(t_dim/2) + t_dim]
             else:
-                new_pos_embed = F.interpolate(new_pos_embed, size=(pos_hw, t_dim), mode='bilinear')
-            if f_dim <= pos_hw:
-                new_pos_embed = new_pos_embed[:, :, int(pos_hw / 2) - int(f_dim / 2): int(pos_hw / 2) - int(f_dim / 2) + f_dim, :]
-            else:
+                new_pos_embed = F.interpolate(new_pos_embed, size=(12, t_dim), mode='bilinear')
+            if f_dim < 12:
+                new_pos_embed = new_pos_embed[:, :, 6 - int(f_dim/2): 6 - int(f_dim/2) + f_dim, :]
+            elif f_dim > 12:
                 new_pos_embed = F.interpolate(new_pos_embed, size=(f_dim, t_dim), mode='bilinear')
             new_pos_embed = new_pos_embed.reshape(1, embed_dim, num_patches).transpose(1, 2)
             self.v.pos_embed = nn.Parameter(torch.cat([self.v.pos_embed[:, :2, :].detach(), new_pos_embed], dim=1))
