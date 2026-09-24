@@ -69,7 +69,7 @@ def parse_args():
     # dataset
     parser.add_argument('--dataset', type=str, default='icbhi')
     parser.add_argument('--data_folder', type=str, default='./data/')
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=8)
     # icbhi dataset
     parser.add_argument('--class_split', type=str, default='lungsound',
