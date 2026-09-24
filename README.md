@@ -524,50 +524,80 @@ HF_HUB_OFFLINE=1 python train.py ...
 
 ### 消融实验命令
 
-**通用参数**（所有实验都需要）：
-```bash
-COMMON="--optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
-  --ma_update --ma_beta 0.5 --from_sl_official --audioset_pretrained \
-  --mix_beta 1.0 --weighted_loss --test_fold official \
-  --pad_types repeat --resz 1 --n_mels 128 \
-  --epochs 50 --seed 1 --batch_size 8"
-```
+> **⚠️ 重要**：所有实验都必须使用 `--from_sl_official --audioset_pretrained` 加载 AudioSet 预训练权重，否则模型无法收敛（S_e=0）。
 
-**各实验命令**：
+**各实验命令（完整参数，可直接复制运行）**：
+
 ```bash
 cd wangruitao
 
 # Exp 0: 原版基线（无 PatchMix，无任何创新模块）
 python main.py --model ast_bandaware --method patchmix \
   --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
-  $COMMON --tag exp0_baseline
+  --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --ma_update --ma_beta 0.5 --from_sl_official --audioset_pretrained \
+  --mix_beta 1.0 --weighted_loss --test_fold official \
+  --pad_types repeat --resz 1 --n_mels 128 \
+  --epochs 50 --seed 1 --batch_size 8 \
+  --dataset icbhi --data_folder ./data \
+  --tag exp0_baseline
 
 # Exp 1: +A（Same-band PatchMix）
 python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
-  $COMMON --tag exp1_A
+  --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --ma_update --ma_beta 0.5 --from_sl_official --audioset_pretrained \
+  --mix_beta 1.0 --weighted_loss --test_fold official \
+  --pad_types repeat --resz 1 --n_mels 128 \
+  --epochs 50 --seed 1 --batch_size 8 \
+  --dataset icbhi --data_folder ./data \
+  --tag exp1_A
 
 # Exp 2: +A+B（+ Band Importance Estimator）
 python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --use_band_importance --no_freq_weighted_lam --no_bandcl \
-  $COMMON --tag exp2_AB
+  --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --ma_update --ma_beta 0.5 --from_sl_official --audioset_pretrained \
+  --mix_beta 1.0 --weighted_loss --test_fold official \
+  --pad_types repeat --resz 1 --n_mels 128 \
+  --epochs 50 --seed 1 --batch_size 8 \
+  --dataset icbhi --data_folder ./data \
+  --tag exp2_AB
 
 # Exp 3: +A+B+C（+ Frequency-weighted λ）
 python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --use_band_importance --use_freq_weighted_lam --no_bandcl \
-  $COMMON --tag exp3_ABC
+  --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --ma_update --ma_beta 0.5 --from_sl_official --audioset_pretrained \
+  --mix_beta 1.0 --weighted_loss --test_fold official \
+  --pad_types repeat --resz 1 --n_mels 128 \
+  --epochs 50 --seed 1 --batch_size 8 \
+  --dataset icbhi --data_folder ./data \
+  --tag exp3_ABC
 
 # Exp 4: +A+B+C+D（完整模型，bandcl_weight=1.0）
 python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl \
   --bandcl_weight 1.0 \
-  $COMMON --tag exp4_ABCD
+  --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --ma_update --ma_beta 0.5 --from_sl_official --audioset_pretrained \
+  --mix_beta 1.0 --weighted_loss --test_fold official \
+  --pad_types repeat --resz 1 --n_mels 128 \
+  --epochs 50 --seed 1 --batch_size 8 \
+  --dataset icbhi --data_folder ./data \
+  --tag exp4_ABCD
 
 # Exp 5: +A+B+C+D（bandcl_weight=0.5，消融 BandCL 权重）
 python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl \
   --bandcl_weight 0.5 \
-  $COMMON --tag exp5_ABCD_05
+  --optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --ma_update --ma_beta 0.5 --from_sl_official --audioset_pretrained \
+  --mix_beta 1.0 --weighted_loss --test_fold official \
+  --pad_types repeat --resz 1 --n_mels 128 \
+  --epochs 50 --seed 1 --batch_size 8 \
+  --dataset icbhi --data_folder ./data \
+  --tag exp5_ABCD_05
 ```
 
 ### 消融实验验证结果（2 epoch 快速测试）
