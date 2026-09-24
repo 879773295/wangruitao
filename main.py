@@ -605,8 +605,8 @@ def main():
             best_acc, best_model, save_bool = validate(val_loader, model, classifier, criterion, args, best_acc, best_model)
             
             # save a checkpoint of model and classifier when the best score is updated
-            if save_bool:            
-                save_file = os.path.join(args.save_folder, 'best_epoch_{}.pth'.format(epoch))
+            if save_bool:
+                save_file = os.path.join(args.save_folder, 'best.pth')
                 print('Best ckpt is modified with Score = {:.2f} when Epoch = {}'.format(best_acc[2], epoch))
                 save_model(model, optimizer, args, epoch, save_file, classifier)
                 
