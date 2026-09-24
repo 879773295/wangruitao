@@ -1,0 +1,52 @@
+=== 加载模型 ./save/icbhi_ast_patchmix_cl_torch201_seed1/best.pth ===
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+
+=== 构建训练集 ===
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 4142
+Class 0 (normal) : 2063 (49.8%)
+Class 1 (crackle): 1215 (29.3%)
+Class 2 (wheeze) : 501  (12.1%)
+Class 3 (both)   : 363  (8.8%)
+
+=== 提取训练集难样本 (top_k=200) ===
+  处理 500/4142 样本...
+  处理 1000/4142 样本...
+  处理 1500/4142 样本...
+  处理 2000/4142 样本...
+  处理 2500/4142 样本...
+  处理 3000/4142 样本...
+  处理 3500/4142 样本...
+  处理 4000/4142 样本...
+
+训练集准确率: 77.84%
+类别分布: normal=2063, crackle=1215, wheeze=501, both=363
+预测错误: 918 样本
+难样本总数: 1001
+  - 预测错误: 918
+  - 置信度低 (top 200): 200
+  - 去重后: 1001
+
+难样本类别分布:
+  Class 0 (normal): 281
+  Class 1 (crackle): 471
+  Class 2 (wheeze): 61
+  Class 3 (both): 188
+
+=== 保存难样本索引到 hard_train_indices.json ===
+保存 1001 个难样本索引
+
+=== 难样本小数据集创建成功 ===
+原始训练集: 4142 样本
+难样本子集: 1001 样本
+比例: 24.2%
+
+下一步：用 hard_train_indices.json 加载难样本子集，快速验证 SOTA 模块

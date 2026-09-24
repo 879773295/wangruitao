@@ -405,7 +405,7 @@ def train(train_loader, model, classifier, projector, criterion, optimizer, epoc
                 if args.model == 'ast_bandaware':
                     # 带四个消融模块的 PatchMix
                     features, labels_a, labels_b, lam, index, band_features_src, band_features_mix, band_importance = model(
-                        images, y=labels, patch_mix=True, time_domain=args.time_domain, mix_lam=args.mix_lam
+                        images, y=labels, patch_mix=True, time_domain=args.time_domain
                     )
                     output = classifier(features)
                     loss = criterion[1](output, labels_a, labels_b, lam)
@@ -443,7 +443,7 @@ def train(train_loader, model, classifier, projector, criterion, optimizer, epoc
                     # use 'patchmix_cl' for augmentation
                     if args.model == 'ast_bandaware':
                         mix_images, labels_a, labels_b, lam, index, band_features_src, band_features_mix, band_importance = model(
-                            images, y=labels, patch_mix=True, time_domain=args.time_domain, mix_lam=args.mix_lam
+                            images, y=labels, patch_mix=True, time_domain=args.time_domain
                         )
                     else:
                         mix_images, labels_a, labels_b, lam, index = model(images, y=labels, patch_mix=True, time_domain=args.time_domain)
@@ -535,7 +535,7 @@ def validate(val_loader, model, classifier, criterion, args, best_acc, best_mode
                        idx + 1, len(val_loader), batch_time=batch_time,
                        loss=losses, top1=top1))
     
-    if sc > best_acc[-1]:
+    if sc > best_acc[-1] and se > 5:
         save_bool = True
         best_acc = [sp, se, sc]
         best_model = [deepcopy(model.state_dict()), deepcopy(classifier.state_dict())]

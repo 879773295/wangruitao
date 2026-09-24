@@ -1,0 +1,55 @@
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 4142
+Class 0 (normal) : 2063 (49.8%)
+Class 1 (crackle): 1215 (29.3%)
+Class 2 (wheeze) : 501  (12.1%)
+Class 3 (both)   : 363  (8.8%)
+********************
+Train and test 60-40% split with test_fold official
+File number in test dataset: 381
+********************
+Extracting individual breathing cycles..
+[Preprocessed test dataset information]
+total number of audio data: 2756
+Class 0 (normal) : 1579 (57.3%)
+Class 1 (crackle): 649  (23.5%)
+Class 2 (wheeze) : 385  (14.0%)
+Class 3 (both)   : 143  (5.2%)
+=== 通道1：FBE（全局+频段特征）===
+---------------AST Model with FBE Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+Frequency Band Embedding: True
+frequency stride=10, time stride=10
+number of patches=1212 (f_dim=12, t_dim=101)
+Frequency Band Embedding (病理频段): num_freq_bands=4, freq_patches=101, embed_dim=768
+
+=== 通道2：CNN（局部特征）===
+
+=== 融合：1024 → 4 ===
+********************
+Training for 50 epochs on icbhi dataset
+DEBUG: num_patches=948, f_dim=101, t_dim=9, remainder=39
+DEBUG: patch_to_band shape=torch.Size([101])
+Traceback (most recent call last):
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 608, in <module>
+    main()
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 578, in main
+    loss, acc = train(train_loader, model, classifier, projector, criterion, optimizer, epoch, args, scaler)
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 394, in train
+    features = model(images)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\nn\modules\module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\tmp\class\patch-mix_contrastive_learning\models\ast_fbe_cnn.py", line 72, in forward
+    fbe_feat = self.fbe(x)  # [B, 768]
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\nn\modules\module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\amp\autocast_mode.py", line 14, in decorate_autocast
+    return func(*args, **kwargs)
+  File "D:\tmp\class\patch-mix_contrastive_learning\models\ast_freq.py", line 404, in forward
+    x = x + self.v.pos_embed
+RuntimeError: The size of tensor a (950) must match the size of tensor b (1214) at non-singleton dimension 1

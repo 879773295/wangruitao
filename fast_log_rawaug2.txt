@@ -1,0 +1,37 @@
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 1247
+Class 0 (normal) : 593  (47.6%)
+Class 1 (crackle): 349  (28.0%)
+Class 2 (wheeze) : 199  (16.0%)
+Class 3 (both)   : 106  (8.5%)
+Traceback (most recent call last):
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 558, in <module>
+    main()
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 500, in main
+    train_loader, val_loader, args = set_loader(args)
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 221, in set_loader
+    train_dataset = ICBHIDataset(train_flag=True, transform=train_transform, args=args, print_flag=True)
+  File "D:\tmp\class\patch-mix_contrastive_learning\util\icbhi_dataset.py", line 215, in __init__
+    audio = augment_raw_audio(audio, self.sample_rate, self.args)
+  File "D:\tmp\class\patch-mix_contrastive_learning\util\augmentation.py", line 35, in augment_raw_audio
+    sample = augment_list[aug_idx].augment(sample)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\nlpaug\base_augmenter.py", line 119, in augment
+    augmented_results = [action_fx(clean_data) for _ in range(n)]
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\nlpaug\base_augmenter.py", line 119, in <listcomp>
+    augmented_results = [action_fx(clean_data) for _ in range(n)]
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\nlpaug\augmenter\audio\speed.py", line 43, in substitute
+    return self.model.manipulate(data, start_pos=start_pos, end_pos=end_pos, speed=speed_level)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\nlpaug\model\audio\speed.py", line 22, in manipulate
+    aug_data = librosa.effects.time_stretch(y=data[start_pos:end_pos], rate=speed)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\librosa\effects.py", line 380, in time_stretch
+    stft = core.stft(y, **kwargs)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\librosa\core\spectrum.py", line 239, in stft
+    util.valid_audio(y)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\librosa\util\utils.py", line 287, in valid_audio
+    raise ParameterError("Audio data must be of type numpy.ndarray")
+librosa.util.exceptions.ParameterError: Audio data must be of type numpy.ndarray

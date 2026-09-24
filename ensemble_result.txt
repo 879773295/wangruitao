@@ -1,0 +1,14 @@
+=== º”‘ÿ ˝æ› ===
+********************
+Train and test 60-40% split with test_fold official
+File number in test dataset: 381
+Traceback (most recent call last):
+  File "D:\tmp\class\patch-mix_contrastive_learning\weighted_ensemble.py", line 185, in <module>
+    main()
+  File "D:\tmp\class\patch-mix_contrastive_learning\weighted_ensemble.py", line 119, in main
+    val_dataset = ICBHIDataset(train_flag=False, transform=val_transform, args=args, print_flag=True)
+  File "D:\tmp\class\patch-mix_contrastive_learning\util\icbhi_dataset.py", line 125, in __init__
+    annotation_dict = get_annotations(args, data_folder)
+  File "D:\tmp\class\patch-mix_contrastive_learning\util\icbhi_util.py", line 34, in get_annotations
+    if args.class_split == 'lungsound' or args.class_split in ['lungsound_meta', 'meta']:
+AttributeError: 'Args' object has no attribute 'class_split'

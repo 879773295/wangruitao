@@ -1,0 +1,46 @@
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 4142
+Class 0 (normal) : 2063 (49.8%)
+Class 1 (crackle): 1215 (29.3%)
+Class 2 (wheeze) : 501  (12.1%)
+Class 3 (both)   : 363  (8.8%)
+********************
+Train and test 60-40% split with test_fold official
+File number in test dataset: 381
+********************
+Extracting individual breathing cycles..
+[Preprocessed test dataset information]
+total number of audio data: 2756
+Class 0 (normal) : 1579 (57.3%)
+Class 1 (crackle): 649  (23.5%)
+Class 2 (wheeze) : 385  (14.0%)
+Class 3 (both)   : 143  (5.2%)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed1/best.pth  (model=ast, epoch=50)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+Using Supervised Contrastive Loss (SupCon)
+[load] ./save/icbhi_ast_patchmix_cl_supcon_seed1_e10/best.pth  (model=ast, epoch=11)
+
+[per-class acc, ensemble argmax] {'normal': 77.0, 'crackle': 56.9, 'wheeze': 37.4, 'both': 18.9}
+ensemble (argmax):  S_p=77.01  S_e=45.88  Score=61.45
+
+top-5 (bias on normal logit):
+  bias      S_p     S_e     Score
+  +0.500  84.42  39.93   62.18
+  +0.475  84.23  40.10   62.17
+  +0.450  83.98  40.19   62.08
+  +0.425  83.47  40.61   62.04
+  +0.350  82.58  41.46   62.02
+
+>>> best: bias=+0.500 -> S_p=84.42, S_e=39.93, Score=62.18  (argmax 61.45, +0.73)

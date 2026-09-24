@@ -1,0 +1,75 @@
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 4142
+Class 0 (normal) : 2063 (49.8%)
+Class 1 (crackle): 1215 (29.3%)
+Class 2 (wheeze) : 501  (12.1%)
+Class 3 (both)   : 363  (8.8%)
+********************
+Train and test 60-40% split with test_fold official
+File number in test dataset: 381
+********************
+Extracting individual breathing cycles..
+[Preprocessed test dataset information]
+total number of audio data: 2756
+Class 0 (normal) : 1579 (57.3%)
+Class 1 (crackle): 649  (23.5%)
+Class 2 (wheeze) : 385  (14.0%)
+Class 3 (both)   : 143  (5.2%)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed1/best.pth  (model=ast, epoch=50)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed6_s50/best.pth  (model=ast, epoch=11)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed1337/best.pth  (model=ast, epoch=50)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed5_s50/best.pth  (model=ast, epoch=11)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed2_e10/best.pth  (model=ast, epoch=10)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed4_e10/best.pth  (model=ast, epoch=10)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed3_e10/best.pth  (model=ast, epoch=10)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+[load] ./save/icbhi_ast_patchmix_cl_torch201_seed42/best_epoch_8.pth  (model=ast, epoch=8)
+
+[per-class acc, ensemble argmax] {'normal': 74.0, 'crackle': 53.6, 'wheeze': 40.8, 'both': 27.3}
+ensemble (argmax):  S_p=74.03  S_e=46.22  Score=60.13
+
+top-5 (bias on normal logit):
+  bias      S_p     S_e     Score
+  +1.050  88.92  33.64   61.28
+  +1.025  88.54  33.90   61.22
+  +0.650  84.04  38.32   61.18
+  +0.975  87.78  34.58   61.18
+  +1.175  90.31  32.03   61.17
+
+>>> best: bias=+1.050 -> S_p=88.92, S_e=33.64, Score=61.28  (argmax 60.13, +1.15)

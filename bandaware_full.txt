@@ -1,0 +1,67 @@
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 4142
+Class 0 (normal) : 2063 (49.8%)
+Class 1 (crackle): 1215 (29.3%)
+Class 2 (wheeze) : 501  (12.1%)
+Class 3 (both)   : 363  (8.8%)
+********************
+Train and test 60-40% split with test_fold official
+File number in test dataset: 381
+********************
+Extracting individual breathing cycles..
+[Preprocessed test dataset information]
+total number of audio data: 2756
+Class 0 (normal) : 1579 (57.3%)
+Class 1 (crackle): 649  (23.5%)
+Class 2 (wheeze) : 385  (14.0%)
+Class 3 (both)   : 143  (5.2%)
+---------------AST Model with FBE Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+Frequency Band Embedding: True
+frequency stride=10, time stride=10
+number of patches=948 (f_dim=79, t_dim=12)
+Frequency Band Embedding (≤°¿Ì∆µ∂Œ): num_freq_bands=4, freq_patches=12, embed_dim=768
+  Band-aware Patch-Mix: num_bands=4
+  Band Importance Estimator: added
+Using BandCL Loss (weight=1.0)
+********************
+Training for 50 epochs on icbhi dataset
+Train: [1][10/517]	BT 0.356 (0.444)	DT 0.019 (0.021)	loss 3.553 (3.974)	Acc@1 12.500 (20.000)
+Train: [1][20/517]	BT 0.358 (0.403)	DT 0.019 (0.020)	loss 3.175 (3.672)	Acc@1 37.500 (36.250)
+Train: [1][30/517]	BT 0.382 (0.391)	DT 0.017 (0.020)	loss 3.146 (3.536)	Acc@1 25.000 (37.500)
+Train: [1][40/517]	BT 0.365 (0.385)	DT 0.017 (0.020)	loss 3.095 (3.437)	Acc@1 50.000 (40.000)
+Train: [1][50/517]	BT 0.360 (0.382)	DT 0.019 (0.020)	loss 2.959 (3.348)	Acc@1 62.500 (42.500)
+Train: [1][60/517]	BT 0.372 (0.380)	DT 0.019 (0.020)	loss 3.165 (3.294)	Acc@1 37.500 (44.792)
+Train: [1][70/517]	BT 0.375 (0.378)	DT 0.021 (0.020)	loss 2.944 (3.264)	Acc@1 62.500 (45.536)
+Train: [1][80/517]	BT 0.362 (0.377)	DT 0.017 (0.020)	loss 2.967 (3.238)	Acc@1 50.000 (45.469)
+Train: [1][90/517]	BT 0.358 (0.376)	DT 0.019 (0.020)	loss 3.092 (3.212)	Acc@1 37.500 (45.833)
+Train: [1][100/517]	BT 0.365 (0.375)	DT 0.019 (0.020)	loss 2.831 (3.183)	Acc@1 62.500 (46.250)
+Train: [1][110/517]	BT 0.376 (0.375)	DT 0.021 (0.020)	loss 3.023 (3.163)	Acc@1 25.000 (46.477)
+Train: [1][120/517]	BT 0.371 (0.374)	DT 0.019 (0.020)	loss 2.898 (3.145)	Acc@1 62.500 (47.292)
+Train: [1][130/517]	BT 0.358 (0.374)	DT 0.020 (0.020)	loss 3.221 (3.131)	Acc@1 25.000 (46.635)
+Train: [1][140/517]	BT 0.370 (0.374)	DT 0.022 (0.020)	loss 2.546 (3.103)	Acc@1 62.500 (47.321)
+Train: [1][150/517]	BT 0.380 (0.373)	DT 0.020 (0.020)	loss 2.722 (3.089)	Acc@1 50.000 (47.333)
+Train: [1][160/517]	BT 0.355 (0.373)	DT 0.019 (0.020)	loss 2.750 (3.070)	Acc@1 37.500 (47.969)
+Train: [1][170/517]	BT 0.374 (0.373)	DT 0.019 (0.020)	loss 3.113 (3.060)	Acc@1 50.000 (47.794)
+Train: [1][180/517]	BT 0.397 (0.373)	DT 0.020 (0.020)	loss 2.936 (3.054)	Acc@1 25.000 (47.500)
+Train: [1][190/517]	BT 0.367 (0.373)	DT 0.017 (0.020)	loss 2.918 (3.049)	Acc@1 50.000 (47.368)
+Train: [1][200/517]	BT 0.376 (0.373)	DT 0.019 (0.020)	loss 2.960 (3.031)	Acc@1 50.000 (47.875)
+Train: [1][210/517]	BT 0.367 (0.372)	DT 0.020 (0.020)	loss 2.735 (3.017)	Acc@1 50.000 (48.036)
+Train: [1][220/517]	BT 0.369 (0.372)	DT 0.021 (0.020)	loss 2.341 (3.005)	Acc@1 62.500 (48.466)
+Train: [1][230/517]	BT 0.397 (0.372)	DT 0.019 (0.020)	loss 2.924 (2.995)	Acc@1 25.000 (48.370)
+Train: [1][240/517]	BT 0.359 (0.373)	DT 0.018 (0.020)	loss 2.763 (2.986)	Acc@1 37.500 (48.438)
+Train: [1][250/517]	BT 0.380 (0.373)	DT 0.020 (0.020)	loss 2.701 (2.975)	Acc@1 50.000 (48.700)
+Train: [1][260/517]	BT 0.362 (0.372)	DT 0.018 (0.020)	loss 2.406 (2.961)	Acc@1 62.500 (48.990)
+Train: [1][270/517]	BT 0.359 (0.372)	DT 0.018 (0.020)	loss 2.088 (2.944)	Acc@1 87.500 (49.352)
+Train: [1][280/517]	BT 0.385 (0.372)	DT 0.020 (0.020)	loss 2.439 (2.934)	Acc@1 75.000 (49.598)
+Train: [1][290/517]	BT 0.359 (0.372)	DT 0.020 (0.020)	loss 2.529 (2.927)	Acc@1 50.000 (49.655)
+Train: [1][300/517]	BT 0.365 (0.372)	DT 0.020 (0.020)	loss 2.493 (2.917)	Acc@1 50.000 (49.667)
+Train: [1][310/517]	BT 0.369 (0.372)	DT 0.021 (0.020)	loss 2.319 (2.902)	Acc@1 62.500 (49.960)
+Train: [1][320/517]	BT 0.382 (0.372)	DT 0.022 (0.020)	loss 2.563 (2.896)	Acc@1 50.000 (50.000)
+Train: [1][330/517]	BT 0.355 (0.372)	DT 0.019 (0.020)	loss 2.382 (2.883)	Acc@1 62.500 (50.379)
+Train: [1][340/517]	BT 0.380 (0.372)	DT 0.021 (0.020)	loss 2.103 (2.874)	Acc@1 75.000 (50.404)

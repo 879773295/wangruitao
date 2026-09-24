@@ -10,6 +10,7 @@ D = BandCL Loss：约束混合后频段与源样本一致
 原版模型使用 Adam 优化器，不使用 SAM
 """
 
+import os
 import numpy as np
 import torch
 import torch.nn as nn
@@ -117,49 +118,102 @@ class ASTModelBandAware(nn.Module):
 
         # AST 模型
         timm.models.vision_transformer.PatchEmbed = PatchEmbed
-        self.v = timm.create_model('vit_deit_base_distilled_patch16_384', pretrained=imagenet_pretrain)
-        self.original_num_patches = self.v.patch_embed.num_patches
-        self.oringal_hw = int(self.original_num_patches ** 0.5)
-        self.original_embedding_dim = self.v.pos_embed.shape[2]
 
-        # 自动获取中间形状
-        f_dim, t_dim = self.get_shape(fstride, tstride, input_fdim, input_tdim)
-        num_patches = f_dim * t_dim
-        self.v.patch_embed.num_patches = num_patches
-        self.f_dim = f_dim
-        self.t_dim = t_dim
+        if audioset_pretrain:
+            # AudioSet 预训练模型
+            if not imagenet_pretrain:
+                raise ValueError('currently model pretrained on only audioset is not supported, please set imagenet_pretrain = True to use audioset pretrained model.')
+            if model_size != 'base384':
+                raise ValueError('currently only has base384 AudioSet pretrained model.')
 
-        # 线性投影层
-        new_proj = nn.Conv2d(1, self.original_embedding_dim, kernel_size=(16, 16), stride=(fstride, tstride))
-        if imagenet_pretrain:
-            new_proj.weight = nn.Parameter(torch.sum(self.v.patch_embed.proj.weight, dim=1).unsqueeze(1))
-            new_proj.bias = self.v.patch_embed.proj.bias
-        self.v.patch_embed.proj = new_proj
+            out_dir = './pretrained_models/'
+            if not os.path.exists(out_dir):
+                os.makedirs(out_dir, exist_ok=True)
 
-        # 位置嵌入（与原版模型保持一致）
-        if imagenet_pretrain:
-            # get the positional embedding from deit model, skip the first two tokens (cls token and distillation token)
-            # reshape it to original 2D shape (24*24)
-            new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, self.original_num_patches, self.original_embedding_dim).transpose(1, 2).reshape(1, self.original_embedding_dim, self.oringal_hw, self.oringal_hw)
-            # cut (from middle) or interpolate the second dimension of the positional embedding
-            if t_dim <= self.oringal_hw:
-                new_pos_embed = new_pos_embed[:, :, :, int(self.oringal_hw / 2) - int(t_dim / 2): int(self.oringal_hw / 2) - int(t_dim / 2) + t_dim]
+            if not os.path.exists(os.path.join(out_dir, 'audioset_10_10_0.4593.pth')):
+                import wget
+                audioset_mdl_url = 'https://www.dropbox.com/s/cv4knew8mvbrnvq/audioset_0.4593.pth?dl=1'
+                wget.download(audioset_mdl_url, out=os.path.join(out_dir, 'audioset_10_10_0.4593.pth'))
+
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            sd = torch.load(os.path.join(out_dir, 'audioset_10_10_0.4593.pth'), map_location=device)
+            # 创建基础 AST 模型加载权重
+            from models.ast import ASTModel
+            audio_model = ASTModel(label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024,
+                                   imagenet_pretrain=False, audioset_pretrain=False, model_size='base384', verbose=False)
+            audio_model = torch.nn.DataParallel(audio_model)
+            audio_model.load_state_dict(sd, strict=False)
+            self.v = audio_model.module.v
+            self.original_embedding_dim = self.v.pos_embed.shape[2]
+            self.original_num_patches = self.v.patch_embed.num_patches
+            self.oringal_hw = int(self.original_num_patches ** 0.5)
+
+            f_dim, t_dim = self.get_shape(fstride, tstride, input_fdim, input_tdim)
+            num_patches = f_dim * t_dim
+            self.v.patch_embed.num_patches = num_patches
+            self.f_dim = f_dim
+            self.t_dim = t_dim
+
+            # 位置嵌入处理（AudioSet 模型）
+            new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, 1212, 768).transpose(1, 2).reshape(1, 768, 12, 101)
+            if t_dim < 101:
+                new_pos_embed = new_pos_embed[:, :, :, 50 - int(t_dim/2): 50 - int(t_dim/2) + t_dim]
             else:
-                new_pos_embed = F.interpolate(new_pos_embed, size=(self.oringal_hw, t_dim), mode='bilinear')
-            # cut (from middle) or interpolate the first dimension of the positional embedding
-            if f_dim <= self.oringal_hw:
-                new_pos_embed = new_pos_embed[:, :, int(self.oringal_hw / 2) - int(f_dim / 2): int(self.oringal_hw / 2) - int(f_dim / 2) + f_dim, :]
-            else:
-                new_pos_embed = F.interpolate(new_pos_embed, size=(f_dim, self.oringal_hw), mode='bilinear')
-            # flatten the positional embedding
-            new_pos_embed = new_pos_embed.reshape(1, self.original_embedding_dim, num_patches).transpose(1, 2)
-            # concatenate the above positional embedding with the cls token and distillation token of the deit model
+                new_pos_embed = F.interpolate(new_pos_embed, size=(12, t_dim), mode='bilinear')
+            if f_dim < 12:
+                new_pos_embed = new_pos_embed[:, :, 6 - int(f_dim/2): 6 - int(f_dim/2) + f_dim, :]
+            elif f_dim > 12:
+                new_pos_embed = F.interpolate(new_pos_embed, size=(f_dim, t_dim), mode='bilinear')
+            new_pos_embed = new_pos_embed.reshape(1, 768, num_patches).transpose(1, 2)
             self.v.pos_embed = nn.Parameter(torch.cat([self.v.pos_embed[:, :2, :].detach(), new_pos_embed], dim=1))
+
+            # 注意：AudioSet 模型的 patch_embed.proj 已经是1通道的，不需要修改
+
         else:
-            # if not use imagenet pretrained model, just randomly initialize a learnable positional embedding
-            new_pos_embed = nn.Parameter(torch.zeros(1, self.v.patch_embed.num_patches + 2, self.original_embedding_dim))
-            self.v.pos_embed = new_pos_embed
-            trunc_normal_(self.v.pos_embed, std=.02)
+            # ImageNet 预训练或随机初始化
+            self.v = timm.create_model('vit_deit_base_distilled_patch16_384', pretrained=imagenet_pretrain)
+            self.original_num_patches = self.v.patch_embed.num_patches
+            self.oringal_hw = int(self.original_num_patches ** 0.5)
+            self.original_embedding_dim = self.v.pos_embed.shape[2]
+
+            # 自动获取中间形状
+            f_dim, t_dim = self.get_shape(fstride, tstride, input_fdim, input_tdim)
+            num_patches = f_dim * t_dim
+            self.v.patch_embed.num_patches = num_patches
+            self.f_dim = f_dim
+            self.t_dim = t_dim
+
+            # 线性投影层
+            new_proj = nn.Conv2d(1, self.original_embedding_dim, kernel_size=(16, 16), stride=(fstride, tstride))
+            if imagenet_pretrain:
+                new_proj.weight = nn.Parameter(torch.sum(self.v.patch_embed.proj.weight, dim=1).unsqueeze(1))
+                new_proj.bias = self.v.patch_embed.proj.bias
+            self.v.patch_embed.proj = new_proj
+
+            # 位置嵌入（与原版 AST 模型保持一致）
+            if imagenet_pretrain:
+                # get the positional embedding from deit model, skip the first two tokens (cls token and distillation token)
+                # reshape it to original 2D shape (14*14 for base384)
+                new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, self.original_num_patches, self.original_embedding_dim).transpose(1, 2).reshape(1, self.original_embedding_dim, self.oringal_hw, self.oringal_hw)
+                # cut (from middle) or interpolate the second dimension of the positional embedding
+                if t_dim <= self.oringal_hw:
+                    new_pos_embed = new_pos_embed[:, :, :, int(self.oringal_hw / 2) - int(t_dim / 2): int(self.oringal_hw / 2) - int(t_dim / 2) + t_dim]
+                else:
+                    new_pos_embed = F.interpolate(new_pos_embed, size=(self.oringal_hw, t_dim), mode='bilinear')
+                # cut (from middle) or interpolate the first dimension of the positional embedding
+                if f_dim <= self.oringal_hw:
+                    new_pos_embed = new_pos_embed[:, :, int(self.oringal_hw / 2) - int(f_dim / 2): int(self.oringal_hw / 2) - int(f_dim / 2) + f_dim, :]
+                else:
+                    new_pos_embed = F.interpolate(new_pos_embed, size=(f_dim, t_dim), mode='bilinear')
+                # flatten the positional embedding
+                new_pos_embed = new_pos_embed.reshape(1, self.original_embedding_dim, num_patches).transpose(1, 2)
+                # concatenate the above positional embedding with the cls token and distillation token of the deit model
+                self.v.pos_embed = nn.Parameter(torch.cat([self.v.pos_embed[:, :2, :].detach(), new_pos_embed], dim=1))
+            else:
+                # if not use imagenet pretrained model, just randomly initialize a learnable positional embedding
+                new_pos_embed = nn.Parameter(torch.zeros(1, self.v.patch_embed.num_patches + 2, self.original_embedding_dim))
+                self.v.pos_embed = new_pos_embed
+                trunc_normal_(self.v.pos_embed, std=.02)
 
         self.v.patch_embed.num_patches = num_patches
 
@@ -181,6 +235,10 @@ class ASTModelBandAware(nn.Module):
         # 创新点 D：BandCL Loss
         if self.use_bandcl:
             self.bandcl_loss = BandCLLoss(loss_type=bandcl_loss_type)
+
+    def load_sl_official_weights(self):
+        """ImageNet 预训练权重已在构造函数中加载，此方法为空操作"""
+        pass
 
     def get_shape(self, fstride, tstride, input_fdim=128, input_tdim=1024):
         test_input = torch.randn(1, 1, input_fdim, input_tdim)
@@ -303,7 +361,7 @@ class ASTModelBandAware(nn.Module):
         return lam.mean().item()
 
     @autocast()
-    def forward(self, x, y=None, patch_mix=False, time_domain=False, mix_lam=0.5):
+    def forward(self, x, y=None, patch_mix=False, time_domain=False):
         """
         前向传播
 
@@ -312,7 +370,6 @@ class ASTModelBandAware(nn.Module):
             y: [B] 标签
             patch_mix: 是否使用 PatchMix
             time_domain: 是否在时域做 PatchMix
-            mix_lam: PatchMix 基础混合比例
         Returns:
             如果 patch_mix=False: 返回 features
             如果 patch_mix=True: 返回 (features, y_a, y_b, lam, index, band_features_src, band_features_mix, band_importance)
@@ -327,6 +384,12 @@ class ASTModelBandAware(nn.Module):
             # 提取原始频段特征（用于 BandCL Loss）
             band_features_src = self.extract_band_features(x, self.num_bands)  # [B, num_bands, D]
 
+            # 使用 Beta 分布采样 lam（与原版一致）
+            if self.mix_beta is not None and self.mix_beta > 0:
+                lam = np.random.beta(self.mix_beta, self.mix_beta)
+            else:
+                lam = 0.5
+
             # 创新点 B：Band Importance Estimator
             band_importance = None
             if self.use_band_importance:
@@ -334,9 +397,7 @@ class ASTModelBandAware(nn.Module):
 
             # 创新点 C：Frequency-weighted λ
             if self.use_freq_weighted_lam and band_importance is not None:
-                lam = self.compute_frequency_weighted_lam(band_importance, mix_lam)
-            else:
-                lam = mix_lam
+                lam = self.compute_frequency_weighted_lam(band_importance, lam)
 
             # 创新点 A：Same-band PatchMix 或原版 PatchMix
             if self.use_same_band_mix:

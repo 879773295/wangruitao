@@ -1,0 +1,28 @@
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 1233
+Class 0 (normal) : 583  (47.3%)
+Class 1 (crackle): 395  (32.0%)
+Class 2 (wheeze) : 138  (11.2%)
+Class 3 (both)   : 117  (9.5%)
+********************
+Train and test 60-40% split with test_fold official
+File number in test dataset: 381
+********************
+Extracting individual breathing cycles..
+[Preprocessed test dataset information]
+total number of audio data: 1144
+Class 0 (normal) : 633  (55.3%)
+Class 1 (crackle): 296  (25.9%)
+Class 2 (wheeze) : 159  (13.9%)
+Class 3 (both)   : 56   (4.9%)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+********************
+Training for 2 epochs on icbhi dataset

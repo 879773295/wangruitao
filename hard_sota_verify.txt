@@ -1,0 +1,138 @@
+
+============================================================
+实验: baseline_ce
+  Label Smoothing: False
+  SupCon: False
+  Learning Rate: 5e-05
+  Epochs: 3
+============================================================
+=== 加载模型 ./save/icbhi_ast_patchmix_cl_torch201_seed1/best.pth ===
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+
+=== 构建数据集 ===
+难样本数量: 1001
+难样本训练集: 1001 样本
+验证集: 2756 样本
+  Epoch 1, batch 100/125, loss: 0.5315, acc: 72.12%
+Epoch 1/3: train_loss=0.6949, train_acc=71.80%, S_p=69.09, S_e=42.14, Score=55.62
+  ★ New best: Score=55.62
+  Epoch 2, batch 100/125, loss: 0.2599, acc: 79.88%
+Epoch 2/3: train_loss=0.4449, train_acc=80.30%, S_p=77.26, S_e=39.85, Score=58.56
+  ★ New best: Score=58.56
+  Epoch 3, batch 100/125, loss: 0.8791, acc: 89.75%
+Epoch 3/3: train_loss=0.2970, train_acc=89.00%, S_p=69.79, S_e=40.44, Score=55.12
+
+============================================================
+实验结果: baseline_ce
+  Best Score: 58.56 (Epoch 2)
+  Best S_p: 77.26, S_e: 39.85
+============================================================
+
+============================================================
+实验: label_smoothing_0.1
+  Label Smoothing: True
+  SupCon: False
+  Learning Rate: 5e-05
+  Epochs: 3
+============================================================
+=== 加载模型 ./save/icbhi_ast_patchmix_cl_torch201_seed1/best.pth ===
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+
+=== 构建数据集 ===
+难样本数量: 1001
+难样本训练集: 1001 样本
+验证集: 2756 样本
+  Epoch 1, batch 100/125, loss: 0.7956, acc: 72.75%
+Epoch 1/3: train_loss=0.8511, train_acc=74.10%, S_p=82.52, S_e=33.90, Score=58.21
+  ★ New best: Score=58.21
+  Epoch 2, batch 100/125, loss: 1.0232, acc: 83.38%
+Epoch 2/3: train_loss=0.6861, train_acc=82.70%, S_p=87.90, S_e=29.48, Score=58.69
+  ★ New best: Score=58.69
+  Epoch 3, batch 100/125, loss: 0.8914, acc: 89.38%
+Epoch 3/3: train_loss=0.5688, train_acc=89.10%, S_p=69.09, S_e=42.82, Score=55.96
+
+============================================================
+实验结果: label_smoothing_0.1
+  Best Score: 58.69 (Epoch 2)
+  Best S_p: 87.90, S_e: 29.48
+============================================================
+
+============================================================
+实验: supcon
+  Label Smoothing: False
+  SupCon: True
+  Learning Rate: 5e-05
+  Epochs: 3
+============================================================
+=== 加载模型 ./save/icbhi_ast_patchmix_cl_torch201_seed1/best.pth ===
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+
+=== 构建数据集 ===
+难样本数量: 1001
+难样本训练集: 1001 样本
+验证集: 2756 样本
+  Epoch 1, batch 100/125, loss: 2.1957, acc: 73.12%
+Epoch 1/3: train_loss=3.4388, train_acc=72.50%, S_p=59.85, S_e=51.32, Score=55.58
+  ★ New best: Score=55.58
+  Epoch 2, batch 100/125, loss: 2.9710, acc: 82.25%
+Epoch 2/3: train_loss=2.5291, train_acc=81.50%, S_p=68.02, S_e=42.40, Score=55.21
+  Epoch 3, batch 100/125, loss: 1.9863, acc: 84.62%
+Epoch 3/3: train_loss=2.3248, train_acc=84.10%, S_p=72.45, S_e=47.58, Score=60.01
+  ★ New best: Score=60.01
+
+============================================================
+实验结果: supcon
+  Best Score: 60.01 (Epoch 3)
+  Best S_p: 72.45, S_e: 47.58
+============================================================
+
+============================================================
+实验: ls01_supcon
+  Label Smoothing: True
+  SupCon: True
+  Learning Rate: 5e-05
+  Epochs: 3
+============================================================
+=== 加载模型 ./save/icbhi_ast_patchmix_cl_torch201_seed1/best.pth ===
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+
+=== 构建数据集 ===
+难样本数量: 1001
+难样本训练集: 1001 样本
+验证集: 2756 样本
+  Epoch 1, batch 100/125, loss: 2.5662, acc: 74.50%
+Epoch 1/3: train_loss=3.4454, train_acc=75.20%, S_p=53.51, S_e=52.85, Score=53.18
+  ★ New best: Score=53.18
+  Epoch 2, batch 100/125, loss: 3.2110, acc: 79.50%
+Epoch 2/3: train_loss=2.7076, train_acc=79.90%, S_p=69.28, S_e=48.60, Score=58.94
+  ★ New best: Score=58.94
+  Epoch 3, batch 100/125, loss: 2.9601, acc: 88.38%
+Epoch 3/3: train_loss=2.5034, train_acc=87.70%, S_p=68.33, S_e=45.03, Score=56.68
+
+============================================================
+实验结果: ls01_supcon
+  Best Score: 58.94 (Epoch 2)
+  Best S_p: 69.28, S_e: 48.60
+============================================================
+
+============================================================
+汇总结果
+============================================================
+baseline_ce                    | Score=58.56 | S_p=77.26 | S_e=39.85
+label_smoothing_0.1            | Score=58.69 | S_p=87.90 | S_e=29.48
+supcon                         | Score=60.01 | S_p=72.45 | S_e=47.58
+ls01_supcon                    | Score=58.94 | S_p=69.28 | S_e=48.60
+
+结果已保存到 hard_sample_sota_results.json

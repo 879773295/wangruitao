@@ -1,0 +1,40 @@
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 1247
+Class 0 (normal) : 593  (47.6%)
+Class 1 (crackle): 349  (28.0%)
+Class 2 (wheeze) : 199  (16.0%)
+Class 3 (both)   : 106  (8.5%)
+********************
+Train and test 60-40% split with test_fold official
+File number in test dataset: 381
+********************
+Extracting individual breathing cycles..
+[Preprocessed test dataset information]
+total number of audio data: 1189
+Class 0 (normal) : 678  (57.0%)
+Class 1 (crackle): 291  (24.5%)
+Class 2 (wheeze) : 163  (13.7%)
+Class 3 (both)   : 57   (4.8%)
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+********************
+Training for 20 epochs on icbhi dataset
+Traceback (most recent call last):
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 558, in <module>
+    main()
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 528, in main
+    loss, acc = train(train_loader, model, classifier, projector, criterion, optimizer, epoch, args, scaler)
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 392, in train
+    scaler.scale(loss).backward()
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\_tensor.py", line 487, in backward
+    torch.autograd.backward(
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\autograd\__init__.py", line 200, in backward
+    Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+RuntimeError: one of the variables needed for gradient computation has been modified by an inplace operation: [torch.cuda.FloatTensor [8, 8]], which is output 0 of ExpBackward0, is at version 1; expected version 0 instead. Hint: enable anomaly detection to find the operation that failed to compute its gradient, with torch.autograd.set_detect_anomaly(True).

@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "<string>", line 31, in <module>
+  File "<string>", line 24, in bench
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\nn\modules\module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\tmp\class\patch-mix_contrastive_learning\models\projector.py", line 17, in forward
+    return self.projector(x)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\nn\modules\module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\nn\modules\container.py", line 217, in forward
+    input = module(input)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\nn\modules\module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\diaoqingguang\miniconda3\envs\patchmix_torch201\lib\site-packages\torch\nn\modules\linear.py", line 114, in forward
+    return F.linear(input, self.weight, self.bias)
+TypeError: linear(): argument 'input' (position 1) must be Tensor, not tuple
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948

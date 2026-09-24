@@ -1,0 +1,38 @@
+=== 加载数据 ===
+********************
+Train and test 60-40% split with test_fold official
+File number in train dataset: 539
+********************
+Extracting individual breathing cycles..
+[Preprocessed train dataset information]
+total number of audio data: 4142
+Class 0 (normal) : 2063 (49.8%)
+Class 1 (crackle): 1215 (29.3%)
+Class 2 (wheeze) : 501  (12.1%)
+Class 3 (both)   : 363  (8.8%)
+********************
+Train and test 60-40% split with test_fold official
+File number in test dataset: 381
+********************
+Extracting individual breathing cycles..
+[Preprocessed test dataset information]
+total number of audio data: 2756
+Class 0 (normal) : 1579 (57.3%)
+Class 1 (crackle): 649  (23.5%)
+Class 2 (wheeze) : 385  (14.0%)
+Class 3 (both)   : 143  (5.2%)
+
+=== 加载模型 ===
+加载基线模型...
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+Traceback (most recent call last):
+  File "D:\tmp\class\patch-mix_contrastive_learning\quick_ensemble.py", line 118, in <module>
+    main()
+  File "D:\tmp\class\patch-mix_contrastive_learning\quick_ensemble.py", line 36, in main
+    model_baseline, classifier_baseline, _, _, _ = M.set_model(ckpt_baseline['args'])
+  File "D:\tmp\class\patch-mix_contrastive_learning\main.py", line 284, in set_model
+    criterion = nn.CrossEntropyLoss(weight=weights, label_smoothing=args.label_smoothing)
+AttributeError: 'Namespace' object has no attribute 'label_smoothing'

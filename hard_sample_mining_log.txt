@@ -1,0 +1,43 @@
+=== 加载模型 ./save/icbhi_ast_patchmix_cl_torch201_seed1/best.pth ===
+---------------AST Model Summary---------------
+ImageNet pretraining: True, AudioSet pretraining: True
+frequncey stride=10, time stride=10
+number of patches=948
+
+=== 提取难样本 (top_k=500) ===
+  处理 500/2756 样本...
+  处理 1000/2756 样本...
+  处理 1500/2756 样本...
+  处理 2000/2756 样本...
+  处理 2500/2756 样本...
+
+验证集准确率: 62.66%
+类别分布: normal=1579, crackle=649, wheeze=385, both=143
+预测错误: 1029 样本
+难样本总数: 1267
+  - 预测错误: 1029
+  - 置信度低 (top 500): 500
+  - 去重后: 1267
+
+难样本类别分布:
+  Class 0 (normal): 510
+  Class 1 (crackle): 379
+  Class 2 (wheeze): 260
+  Class 3 (both): 118
+
+=== 保存难样本索引到 hard_samples.json ===
+保存 1267 个难样本索引
+
+=== 难样本示例 ===
+  Index 0: True=normal, Pred=wheeze, Conf=0.5322
+  Index 2: True=wheeze, Pred=both, Conf=0.5225
+  Index 4: True=crackle, Pred=crackle, Conf=0.4758
+  Index 6: True=crackle, Pred=crackle, Conf=0.5088
+  Index 7: True=crackle, Pred=crackle, Conf=0.5522
+  Index 8: True=crackle, Pred=normal, Conf=0.8076
+  Index 11: True=crackle, Pred=normal, Conf=0.7212
+  Index 12: True=crackle, Pred=normal, Conf=0.5381
+  Index 13: True=crackle, Pred=normal, Conf=0.8135
+  Index 15: True=crackle, Pred=crackle, Conf=0.5303
+
+完成！难样本索引已保存到 hard_samples.json
