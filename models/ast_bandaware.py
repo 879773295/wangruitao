@@ -106,7 +106,6 @@ class ASTModelBandAware(nn.Module):
         super(ASTModelBandAware, self).__init__()
         assert timm.__version__ == '0.4.5'
 
-        self.final_feat_dim = 768
         self.mix_beta = mix_beta
         self.num_bands = num_bands
 
@@ -220,6 +219,7 @@ class ASTModelBandAware(nn.Module):
                 trunc_normal_(self.v.pos_embed, std=.02)
 
         self.v.patch_embed.num_patches = num_patches
+        self.final_feat_dim = self.original_embedding_dim
 
         # 分类头（与原版模型保持一致）
         self.mlp_head = nn.Sequential(
