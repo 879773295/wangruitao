@@ -456,70 +456,143 @@ HF_HUB_OFFLINE=1 python train.py ...
 
 **用途**：验证四个消融模块在原版模型（Adam 优化器）上的效果
 
+### ⚠️ 重要：所有实验都需要 AudioSet 预训练
+
+**所有消融实验都必须使用 AudioSet 预训练权重**（`--from_sl_official --audioset_pretrained`）。没有预训练权重，模型无法收敛（S_e=0）。
+
+### 四个创新模块详解
+
+#### 模块 A：Same-band PatchMix（同频段 PatchMix）
+
+**原理**：原版 PatchMix 随机交换任意位置的 patch，可能破坏频谱的频段结构。Same-band PatchMix 只在**相同频段内**交换 patch，保持频段间的频率连续性。
+
+**作用**：
+- 保留频谱的频段结构信息
+- 让模型学习频段内的判别特征
+- 避免跨频段 patch 交换导致的频率不连续
+
+**参数**：`--use_same_band_mix`（启用）/ `--no_same_band_mix`（禁用）
+
+**代码位置**：`models/ast_bandaware.py` → `patch_mix_band_aware()`
+
+#### 模块 B：Band Importance Estimator（频段重要性估计器）
+
+**原理**：使用 MLP 网络学习每个频段的重要性权重。输入各频段的平均特征，输出 softmax 归一化的重要性权重。
+
+**作用**：
+- 自动学习哪些频段对分类更重要
+- 为后续的频率加权混合提供权重
+- 可解释性：可以查看各频段的重要性
+
+**参数**：
+- `--use_band_importance`（启用）/ `--no_band_importance`（禁用）
+- `--band_importance_hidden_ratio`（MLP 隐藏层比例，默认4）
+- `--band_importance_temperature`（softmax 温度，默认1.0）
+
+**代码位置**：`models/ast_bandaware.py` → `BandImportanceEstimator`
+
+#### 模块 C：Frequency-weighted λ（频率加权混合比例）
+
+**原理**：根据频段重要性权重计算 PatchMix 的混合比例 λ。重要性高的频段保留更多原始信息，重要性低的频段更多地交换。
+
+**作用**：
+- 重要频段保留更多信息，减少信息损失
+- 不重要频段更多交换，增加数据多样性
+- 自适应混合比例，比固定 λ 更灵活
+
+**参数**：`--use_freq_weighted_lam`（启用）/ `--no_freq_weighted_lam`（禁用）
+
+**代码位置**：`models/ast_bandaware.py` → `compute_frequency_weighted_lam()`
+
+#### 模块 D：BandCL Loss（频段对比一致性损失）
+
+**原理**：约束混合后的频段特征与源样本的频段特征一致。使用 MSE/L1/Cosine 损失计算频段特征差异。
+
+**作用**：
+- 防止 PatchMix 破坏频段语义
+- 确保混合后频段特征的合理性
+- 提升模型对频段结构的保持能力
+
+**参数**：
+- `--use_bandcl`（启用）/ `--no_bandcl`（禁用）
+- `--bandcl_weight`（损失权重，默认1.0）
+- `--bandcl_loss_type`（损失类型：mse/l1/cosine，默认mse）
+
+**代码位置**：`models/ast_bandaware.py` → `BandCLLoss`
+
+---
+
 ### 消融实验命令
 
+**通用参数**（所有实验都需要）：
+```bash
+COMMON="--optimizer adam --learning_rate 5e-5 --weight_decay 1e-6 --cosine \
+  --ma_update --ma_beta 0.5 --from_sl_official --audioset_pretrained \
+  --mix_beta 1.0 --weighted_loss --test_fold official \
+  --pad_types repeat --resz 1 --n_mels 128 \
+  --epochs 50 --seed 1 --batch_size 8"
+```
+
+**各实验命令**：
 ```bash
 cd wangruitao
 
 # Exp 0: 原版基线（无 PatchMix，无任何创新模块）
-python main.py \
-  --model ast \
-  --method ce \
-  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
-  --tag original_ce
-
-# Exp 1: 原版 + 原始 PatchMix（随机交换）
-python main.py \
-  --model ast \
-  --method patchmix \
+python main.py --model ast_bandaware --method patchmix \
   --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
-  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
-  --tag original_patchmix
+  $COMMON --tag exp0_baseline
 
-# Exp 2: 原版 + A（Same-band PatchMix）
-python main.py \
-  --model ast_bandaware \
-  --method patchmix \
+# Exp 1: +A（Same-band PatchMix）
+python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl \
-  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
-  --tag original_plus_A
+  $COMMON --tag exp1_A
 
-# Exp 3: 原版 + A + B（+ Band Importance）
-python main.py \
-  --model ast_bandaware \
-  --method patchmix \
+# Exp 2: +A+B（+ Band Importance Estimator）
+python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --use_band_importance --no_freq_weighted_lam --no_bandcl \
-  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
-  --tag original_plus_AB
+  $COMMON --tag exp2_AB
 
-# Exp 4: 原版 + A + B + C（+ Freq-weighted λ）
-python main.py \
-  --model ast_bandaware \
-  --method patchmix \
+# Exp 3: +A+B+C（+ Frequency-weighted λ）
+python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --use_band_importance --use_freq_weighted_lam --no_bandcl \
-  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
-  --tag original_plus_ABC
+  $COMMON --tag exp3_ABC
 
-# Exp 5: 原版 + A + B + C + D（完整模型）
-python main.py \
-  --model ast_bandaware \
-  --method patchmix \
+# Exp 4: +A+B+C+D（完整模型，bandcl_weight=1.0）
+python main.py --model ast_bandaware --method patchmix \
   --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl \
   --bandcl_weight 1.0 \
-  --epochs 50 --max_epochs 10 --seed 1 --batch_size 8 \
-  --tag original_full
+  $COMMON --tag exp4_ABCD
+
+# Exp 5: +A+B+C+D（bandcl_weight=0.5，消融 BandCL 权重）
+python main.py --model ast_bandaware --method patchmix \
+  --use_same_band_mix --use_band_importance --use_freq_weighted_lam --use_bandcl \
+  --bandcl_weight 0.5 \
+  $COMMON --tag exp5_ABCD_05
 ```
+
+### 消融实验验证结果（2 epoch 快速测试）
+
+| 实验 | 模块 | S_p | S_e | Score | 状态 |
+|------|------|-----|-----|-------|------|
+| Exp 0 | 原版（无模块） | 41.80 | 56.92 | 49.36 | ✅ 正常 |
+| Exp 1 | +A | 41.99 | 59.81 | 50.90 | ✅ 正常 |
+| Exp 2 | +A+B | 32.62 | 65.85 | 49.23 | ✅ 正常 |
+| Exp 3 | +A+B+C | 44.40 | 53.95 | 49.17 | ✅ 正常 |
+| Exp 4 | +A+B+C+D | 56.36 | 51.57 | 53.97 | ✅ 正常 |
+| Exp 5 | +A+B+C+D(0.5) | 38.19 | 61.09 | 49.64 | ✅ 正常 |
+
+> 注：2 epoch 仅为验证实验正常，完整训练需要 50 epoch。
 
 ### 消融实验对比表（原版模型，Adam 优化器）
 
 | 实验 | 模型 | PatchMix | A | B | C | D | 说明 |
 |------|------|----------|---|---|---|---|------|
-| Exp 0 | 原版 AST | ❌ | ❌ | ❌ | ❌ | ❌ | 基线（无 PatchMix） |
-| Exp 1 | 原版 AST | ✓ 随机 | ❌ | ❌ | ❌ | ❌ | +原始 PatchMix |
-| Exp 2 | AST Band-aware | ✓ 同频段 | ✓ | ❌ | ❌ | ❌ | +A |
-| Exp 3 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ❌ | ❌ | +A+B |
-| Exp 4 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ✓ | ❌ | +A+B+C |
-| Exp 5 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ✓ | ✓ | +A+B+C+D |
+| Exp 0 | AST Band-aware | ✓ 随机 | ❌ | ❌ | ❌ | ❌ | 基线（原版 PatchMix） |
+| Exp 1 | AST Band-aware | ✓ 同频段 | ✓ | ❌ | ❌ | ❌ | +Same-band PatchMix |
+| Exp 2 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ❌ | ❌ | +Band Importance |
+| Exp 3 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ✓ | ❌ | +Freq-weighted λ |
+| Exp 4 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ✓ | ✓ | +BandCL Loss（完整） |
+| Exp 5 | AST Band-aware | ✓ 同频段 | ✓ | ✓ | ✓ | ✓ | +BandCL(λ=0.5) |
 
 ---
 
