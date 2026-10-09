@@ -1187,6 +1187,83 @@ sam_original/data/ICBHI_final_database/
 
 ---
 
+## 混淆矩阵画图（论文 Fig.13 风格）
+
+`plot_confusion.py` 生成与 SPRSound 论文 Fig.13 同版式的混淆矩阵：Predicted Label 在顶部横排、True Label 在左侧竖排、对角线蓝（正确识别正常音）/ 红（正确识别异常音）并显示「数量 + 行百分比」两行、底部图例。支持 **2×2 二分类** 和 **n×n 多分类**，两个数据集通用。
+
+> 运行环境：conda 环境 `patchmix_torch201`（仓库自带的 `.venv` 已损坏不可用）。
+
+### 方式一：手动填数字（JSON 模板）
+
+编辑 `matrix_example_2x2.json`（2×2）或 `matrix_example.json`（n×n），`counts` 为**行=真实标签、列=预测标签**的二维数组：
+
+```json
+{
+  "title": "你的图标题",
+  "labels": ["Normal", "Adventitious"],
+  "counts": [
+    [1445, 283],
+    [228, 477]
+  ]
+}
+```
+
+```bash
+python plot_confusion.py --json matrix_example_2x2.json --out my_fig.png
+```
+
+### 方式二：从预测文件自动计算（ICBHI）
+
+先用 `dump_icbhi_preds.py` 导出测试集预测（y_true + y_pred），再画图。已有现成的 `preds_icbhi_sam.npz`（2756 条，SAM+PatchMix 权重）可直接用：
+
+```bash
+# 4 类 n×n
+python plot_confusion.py --preds preds_icbhi_sam.npz --labels Normal Crackle Wheeze Both --out fig_icbhi_sam4.png
+
+# 2×2 二分类（4 类自动折叠：Crackle/Wheeze/Both 合并为 Adventitious）
+python plot_confusion.py --preds preds_icbhi_sam.npz --labels Normal Crackle Wheeze Both --binary --out fig_icbhi_binary.png
+```
+
+换自己的 checkpoint 时先导出预测：
+
+```bash
+python dump_icbhi_preds.py --ckpt save/<实验名>/best.pth --out preds_icbhi.npz
+python plot_confusion.py --preds preds_icbhi.npz --labels Normal Crackle Wheeze Both --binary
+```
+
+### 方式三：SPRSound 事件级自动推理
+
+```bash
+python plot_confusion.py --sprsound --split all    --out fig_sprsound_combined.png  # 7 类合并测试集
+python plot_confusion.py --sprsound --split inter  --out fig_sprsound_inter.png     # 7 类患者独立子集
+python plot_confusion.py --sprsound --split all    --binary                         # 2×2 二分类
+```
+
+`--ckpt` 默认 `sam_original_sprsound/checkpoints/best_model.pth`，可用 `--ckpt` 覆盖。
+
+### 常用参数
+
+| 参数 | 说明 |
+|---|---|
+| `--binary` | 折叠成 2×2（Normal vs Adventitious，对应 SPRSound 论文 Task 1-1 口径）|
+| `--title "..."` | 图标题 |
+| `--out xxx.png` | 输出文件名（也支持 `.pdf` 矢量输出）|
+| `--style fig13\|blues` | `fig13`=仿原论文白底蓝/红对角线（默认）；`blues`=经典蓝色渐变热力图 |
+| `--normal-index 0` | Normal 类的下标（决定对角线用蓝色）|
+| `--figsize 6` | 图宽（英寸），高度按类别数自动算，类别多时自动加宽防标签重叠 |
+
+### 已生成的成品图
+
+| 文件 | 内容 |
+|---|---|
+| `fig_icbhi_binary.png` | ICBHI 2×2：[[1379, 200], [583, 594]]，S_p 87.3 / S_e 50.5（二分类口径）|
+| `fig_icbhi_sam4.png` | ICBHI 4 类，官方测试集 2756 条 |
+| `fig_sprsound_binary.png` | SPRSound 2×2：[[1587, 141], [55, 650]]，二分类 Acc 92.3 |
+| `fig_sprsound_combined.png` | SPRSound 7 类合并（2433 事件），论文主图推荐 |
+| `fig_sprsound_inter.png` | SPRSound 7 类 inter-only（1429 事件），罕见类行全 0 |
+
+---
+
 ## 模型清单
 
 | `--model` | 文件 | 说明 |
@@ -1207,6 +1284,9 @@ sam_original/data/ICBHI_final_database/
 | `optim/sam.py` | SAM 优化器 |
 | `sam_original/` | ICBHI-AST-SAM 原版代码 |
 | `sam_original_sprsound/` | SPRSound 事件级 7 分类（SAM + CustomAST） |
+| `plot_confusion.py` | 论文 Fig.13 风格混淆矩阵（支持 2×2 / n×n，三种输入方式）|
+| `dump_icbhi_preds.py` | 导出 ICBHI 测试集预测 → npz（供画图/分析）|
+| `matrix_example.json` / `matrix_example_2x2.json` | 手动填数字的 JSON 模板（n×n / 2×2）|
 
 ---
 

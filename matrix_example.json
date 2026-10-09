@@ -1,0 +1,10 @@
+{
+  "title": "ICBHI 4-class (example - 把 counts 换成你的真实数字)",
+  "labels": ["Normal", "Crackle", "Wheeze", "Both"],
+  "counts": [
+    [145, 30, 20, 10],
+    [25, 60, 15, 10],
+    [18, 12, 55, 15],
+    [10, 8, 12, 40]
+  ]
+}

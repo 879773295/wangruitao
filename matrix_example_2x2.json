@@ -1,0 +1,8 @@
+{
+  "title": "2x2 手动输入示例（把 counts 换成你的真实数字）",
+  "labels": ["Normal", "Adventitious"],
+  "counts": [
+    [1445, 283],
+    [228, 477]
+  ]
+}
