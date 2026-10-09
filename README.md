@@ -1102,6 +1102,60 @@ sam_original/data/ICBHI_final_database/
 
 ---
 
+## 方法 3：SPRSound 事件级 7 分类（原始 SAM + CustomAST）
+
+对 [SPRSound（BioCAS 2022）](https://github.com/SJTU-RHRL/SPRSound) 做**事件级（event-level）7 分类**。模型用原始 SAM 优化器 + HuggingFace AST（mean pooling + Dropout 0.3）+ 交叉熵。代码在 `sam_original_sprsound/` 目录，与 ICBHI 主流程完全独立，不修改原版代码。
+
+### 7 类标签
+
+`Normal=0, Rhonchi=1, Wheeze=2, Stridor=3, Coarse Crackle=4, Fine Crackle=5, Wheeze+Crackle=6`
+
+### 环境要求
+
+- torch 2.0.1+cu118（conda 环境 `patchmix_torch201`）
+- `transformers`（ASTFeatureExtractor / ASTModel）、`librosa`、`scikit-learn`、`numpy`、`tqdm`
+
+### 运行步骤
+
+1. 下载 SPRSound（BioCAS2022），把 `preprocess_event.py` 里的 `DATA_DIR` 改成你自己的数据路径（默认 `D:/tmp/class/SPRSound-main/SPRSound-main/BioCAS2022`）。
+
+2. **预处理**（8kHz→16kHz 重采样，按事件 start/end 切片，循环填充到 8s / 128000 采样点）：
+
+   ```bash
+   cd sam_original_sprsound
+   python preprocess_event.py
+   ```
+
+   输出 `sprsound_event_7class.npz`：训练 6656 事件 / 测试 2433 事件（test = intra 379 + inter 355 条记录）。
+
+3. **训练**（20 epoch，`WeightedRandomSampler` 缓解类不平衡，每 epoch 打印各类准确率）：
+
+   ```bash
+   python train_event.py --epochs 20 --batch_size 8 --lr 1e-5
+   ```
+
+   最优 checkpoint 存 `checkpoints/best_model.pth`。
+
+4. **评估**（inter / intra 分开）：
+
+   ```bash
+   python evaluate_split.py
+   ```
+
+### 结果（20 epoch，best epoch 19）
+
+| 评估 | Acc | S_p | S_e | Score |
+|---|---|---|---|---|
+| inter-only（患者 0 重叠，真实泛化） | 88.52 | 90.19 | 94.86 | 92.53 |
+| intra-only（患者内） | 89.74 | — | — | — |
+| 合并（inter + intra） | 89.03 | — | — | 92.02 |
+
+**结论**：inter ≈ intra（差 ~1%），模型跨患者泛化好、无患者级泄露；整体 Acc 主要被 Normal（测试占比 ~71%）撑起，7 类宏平均约 ~55%，罕见类（Rhonchi / Stridor / Coarse Crackle，训练各 < 50 例）召回≈0 是主要瓶颈。
+
+> ⚠️ 协议说明：当前 `train_event.py` 用测试集选 best checkpoint（`score > best_score` 才保存），报告的 Score 偏乐观；严谨做法是从 train2022 按患者切一份验证集用于选模型。数据切分口径详见 README 顶部「评测指标」与 ICBHI 章节。
+
+---
+
 ## 模型清单
 
 | `--model` | 文件 | 说明 |
@@ -1121,6 +1175,7 @@ sam_original/data/ICBHI_final_database/
 | `ensemble_eval.py` | 集成 + TTA + 阈值校准 |
 | `optim/sam.py` | SAM 优化器 |
 | `sam_original/` | ICBHI-AST-SAM 原版代码 |
+| `sam_original_sprsound/` | SPRSound 事件级 7 分类（SAM + CustomAST） |
 
 ---
 

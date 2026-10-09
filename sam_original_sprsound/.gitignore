@@ -1,0 +1,7 @@
+# 运行产物，不上传
+train_log.txt
+*.npz
+*.pth
+checkpoints/
+__pycache__/
+*.pyc
