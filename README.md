@@ -1110,6 +1110,23 @@ sam_original/data/ICBHI_final_database/
 
 `Normal=0, Rhonchi=1, Wheeze=2, Stridor=3, Coarse Crackle=4, Fine Crackle=5, Wheeze+Crackle=6`
 
+### 数据分布
+
+事件级样本按 7 类统计，类不平衡严重（Normal 一家独大，罕见类样本极少）：
+
+| 类别 | 训练集 | 占比 | 测试集 | 占比 |
+|---|---:|---:|---:|---:|
+| Normal | 5159 | 77.51% | 1728 | 71.02% |
+| Fine Crackle | 912 | 13.70% | 255 | 10.48% |
+| Wheeze | 452 | 6.79% | 413 | 16.97% |
+| Coarse Crackle | 49 | 0.74% | 17 | 0.70% |
+| Rhonchi | 39 | 0.59% | 14 | 0.58% |
+| Wheeze+Crackle | 30 | 0.45% | 4 | 0.16% |
+| Stridor | 15 | 0.23% | 2 | 0.08% |
+| **合计** | **6656** | — | **2433** | — |
+
+> 测试集 = intra（1004 事件）+ inter（1429 事件）。Stridor / Rhonchi / Coarse Crackle / Wheeze+Crackle 四类训练样本合计仅 ~133 例（~2%），是后续召回上不去的主因。
+
 ### 环境要求
 
 - torch 2.0.1+cu118（conda 环境 `patchmix_torch201`）
@@ -1147,8 +1164,22 @@ sam_original/data/ICBHI_final_database/
 | 评估 | Acc | S_p | S_e | Score |
 |---|---|---|---|---|
 | inter-only（患者 0 重叠，真实泛化） | 88.52 | 90.19 | 94.86 | 92.53 |
-| intra-only（患者内） | 89.74 | — | — | — |
-| 合并（inter + intra） | 89.03 | — | — | 92.02 |
+| intra-only（患者内） | 89.74 | 94.33 | 88.92 | 91.63 |
+| 合并（inter + intra） | 89.03 | 91.84 | 92.20 | 92.02 |
+
+**每类准确率**（%，inter-only 为可引用的无泄露口径）：
+
+| 类别 | inter-only | 合并（inter+intra） |
+|---|---:|---:|
+| Normal | 90.2 | 91.8 |
+| Rhonchi | 0.0 | 71.4 |
+| Wheeze | 84.3 | 85.2 |
+| Stridor | 0.0 | 0.0 |
+| Coarse Crackle | 0.0 | 5.9 |
+| Fine Crackle | 86.2 | 83.9 |
+| Wheeze+Crackle | 100.0* | 50.0 |
+
+> *inter-only 的 Wheeze+Crackle 仅极少量样本，100% 是样本太少造成的噪声；Rhonchi / Stridor / Coarse Crackle 在 inter 测试里样本也极少，召回≈0。
 
 **结论**：inter ≈ intra（差 ~1%），模型跨患者泛化好、无患者级泄露；整体 Acc 主要被 Normal（测试占比 ~71%）撑起，7 类宏平均约 ~55%，罕见类（Rhonchi / Stridor / Coarse Crackle，训练各 < 50 例）召回≈0 是主要瓶颈。
 
