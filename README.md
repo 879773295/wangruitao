@@ -1185,6 +1185,67 @@ sam_original/data/ICBHI_final_database/
 
 > ⚠️ 协议说明：当前 `train_event.py` 用测试集选 best checkpoint（`score > best_score` 才保存），报告的 Score 偏乐观；严谨做法是从 train2022 按患者切一份验证集用于选模型。数据切分口径详见 README 顶部「评测指标」与 ICBHI 章节。
 
+### 四模块消融（Band-aware Patch-Mix，7 分类版）
+
+把方法 5 的四模块消融移植到事件级 7 分类：模型底座同为 HuggingFace AST，训练逻辑与 `sam_bandaware_sprsound/train.py`（5 类版）逐行一致，四组实验设计相同。代码在 `model_bandaware.py`（模型 + 四模块）与 `train_event.py`（训练循环），**默认全关 = 原始 SAM 基线，不加参数行为与旧版完全一致**。
+
+**消融维度**：
+
+| 开关 | 模块 | 说明 |
+|---|---|---|
+| `--use_patch_mix` | 基础 PatchMix | 随机交换 patch（Exp1 起启用） |
+| `--use_same_band_mix` | **A** | Same-band Patch-Mix：只在同频段内交换 |
+| `--use_band_importance` | **B** | Band Importance Estimator：频段重要性权重 |
+| `--use_freq_weighted_lam` | **C** | Frequency-weighted λ：按重要性加权混合比例 |
+| `--use_bandcl` | **D** | BandCL Loss（`--bandcl_weight 0.01`） |
+
+**训练方法**：
+
+```bash
+cd sam_original_sprsound
+
+# 正式：6 组 × 20 epoch（约 2 小时/组）
+bash run_ablation.sh
+
+# 快速：每组 1 个 epoch（验证趋势用）
+EPOCHS=1 bash run_ablation.sh
+
+# 冒烟：Exp0 + Exp5 各 5 个 batch（只验证代码能跑通）
+bash run_ablation.sh smoke
+
+# 手动跑单组（示例：Exp3 = A+B）
+python train_event.py --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 7 \
+  --bandcl_weight 0.01 --data_path ./sprsound_event_7class.npz \
+  --use_patch_mix --use_same_band_mix --use_band_importance \
+  --checkpoint_dir ./checkpoints/abl_plusAB
+```
+
+每组输出 `S_p / S_e / Score / Acc` + 各类准确率，best checkpoint 存到各自的 `checkpoints/abl_*` 目录（互不覆盖）。
+
+**6 组实验设计**（与 5 类版一致）：
+
+| 组 | 配置 |
+|---|---|
+| Exp0 | 纯 SAM 基线（全关） |
+| Exp1 | + 原始 PatchMix（随机交换） |
+| Exp2 | + A（Same-band PatchMix） |
+| Exp3 | + A + B（Band Importance） |
+| Exp4 | + A + B + C（Freq-weighted λ） |
+| Exp5 | Full = A + B + C + D（BandCL，权重 0.01） |
+
+**初跑结果**（每组 1 epoch、单 seed、测试集选 best——仅验证量级，非正式数据）：
+
+| 组 | S_p | S_e | Score | Acc |
+|---|---:|---:|---:|---:|
+| Exp0 纯 SAM | 76.16 | 97.16 | **86.66** | 78.34 |
+| Exp1 +PatchMix | 83.45 | 94.61 | **89.03** | 81.01 |
+| Exp2 +A | 80.38 | 94.47 | **87.43** | 80.23 |
+| Exp3 +A+B | 84.26 | 94.18 | **89.22** | 82.24 |
+| Exp4 +A+B+C | 51.04 | 99.01 | **75.02** | 58.69 |
+| Exp5 Full | 75.64 | 96.31 | **85.97** | 76.61 |
+
+> 解读：Exp3（A+B）最佳（+2.56）；Exp4 的 Freq-weighted λ 单 epoch 未收敛导致 S_p 塌到 51（几乎全预测异常）；Exp5 被 BandCL 拉回但仍低于 Exp3。**正式结论需 20 epoch × 多 seed**（`bash run_ablation.sh`），1 epoch 表仅供趋势参考。
+
 ---
 
 ## 混淆矩阵画图（论文 Fig.13 风格）
@@ -1287,6 +1348,8 @@ python plot_confusion.py --sprsound --split all    --binary                     
 | `plot_confusion.py` | 论文 Fig.13 风格混淆矩阵（支持 2×2 / n×n，三种输入方式）|
 | `dump_icbhi_preds.py` | 导出 ICBHI 测试集预测 → npz（供画图/分析）|
 | `matrix_example.json` / `matrix_example_2x2.json` | 手动填数字的 JSON 模板（n×n / 2×2）|
+| `sam_original_sprsound/run_ablation.sh` | 7 分类四模块消融一键脚本（6 组 + smoke 模式）|
+| `sam_original_sprsound/model_bandaware.py` | 7 分类四模块模型（A/B/C/D，移植自 5 类版）|
 
 ---
 
