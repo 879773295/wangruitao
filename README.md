@@ -1213,6 +1213,9 @@ EPOCHS=1 bash run_ablation.sh
 # 冒烟：Exp0 + Exp5 各 5 个 batch（只验证代码能跑通）
 bash run_ablation.sh smoke
 
+# 断点续跑：跳过前 N 组（已完成的组不重跑），如从 Exp4 续跑
+START_FROM=4 bash run_ablation.sh
+
 # 手动跑单组（示例：Exp3 = A+B）
 python train_event.py --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 7 \
   --bandcl_weight 0.01 --data_path ./sprsound_event_7class.npz \
@@ -1232,6 +1235,19 @@ python train_event.py --epochs 20 --batch_size 8 --lr 1e-5 --num_classes 7 \
 | Exp3 | + A + B（Band Importance） |
 | Exp4 | + A + B + C（Freq-weighted λ） |
 | Exp5 | Full = A + B + C + D（BandCL，权重 0.01） |
+
+**20 epoch 正式结果**（单 seed、测试集选 best；2026-10-13 更新，Exp0–3 已完成，Exp4/Exp5 训练中）：
+
+| 组 | S_p | S_e | Score | Acc | Δ vs 基线 |
+|---|---:|---:|---:|---:|---:|
+| Exp0 纯 SAM | 90.34 | 94.75 | **92.54** | 88.33 | — |
+| Exp1 +PatchMix | 89.58 | 94.33 | **91.95** | 87.38 | -0.59 |
+| Exp2 +A | 90.10 | 93.76 | **91.93** | 87.30 | -0.61 |
+| Exp3 +A+B | 88.89 | 96.31 | **92.60** | 87.63 | **+0.06** |
+| Exp4 +A+B+C | 训练中 | | | | |
+| Exp5 Full | 待跑 | | | | |
+
+> 解读（截至 Exp3）：20 epoch 下 Exp3（A+B）以 92.60 首次超过基线（+0.06），且 S_e 96.31 为全场最高（S_p 88.89 略降，跷跷板）；Exp1/Exp2 反而低于基线。单 seed 结论仍需多 seed 复验，完整 6 组跑完后更新此表。
 
 **初跑结果**（每组 1 epoch、单 seed、测试集选 best——仅验证量级，非正式数据）：
 
@@ -1348,7 +1364,7 @@ python plot_confusion.py --sprsound --split all    --binary                     
 | `plot_confusion.py` | 论文 Fig.13 风格混淆矩阵（支持 2×2 / n×n，三种输入方式）|
 | `dump_icbhi_preds.py` | 导出 ICBHI 测试集预测 → npz（供画图/分析）|
 | `matrix_example.json` / `matrix_example_2x2.json` | 手动填数字的 JSON 模板（n×n / 2×2）|
-| `sam_original_sprsound/run_ablation.sh` | 7 分类四模块消融一键脚本（6 组 + smoke 模式）|
+| `sam_original_sprsound/run_ablation.sh` | 7 分类四模块消融一键脚本（6 组 + smoke 模式 + `START_FROM` 断点续跑）|
 | `sam_original_sprsound/model_bandaware.py` | 7 分类四模块模型（A/B/C/D，移植自 5 类版）|
 
 ---

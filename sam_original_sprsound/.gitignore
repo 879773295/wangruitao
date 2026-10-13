@@ -5,3 +5,5 @@ train_log.txt
 checkpoints/
 __pycache__/
 *.pyc
+*.log
+run_ablation_full.bat
