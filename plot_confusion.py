@@ -16,6 +16,15 @@
    npz 文件里需包含两个数组：y_true（真实标签）、y_pred（预测标签），然后：
        python plot_confusion.py --preds preds.npz --labels Normal Crackle Wheeze Both
 
+4) ICBHI 4类 checkpoint（自动识别两种格式，推理 + 出图一步完成）：
+       # main.py 格式（原版 Patch-Mix，save/<model>/best.pth）
+       python plot_confusion.py --icbhi --ckpt save/ast/best.pth
+       # 裸 state_dict（sam_bandaware 系列，开关必须与训练时一致）
+       python plot_confusion.py --icbhi --ckpt sam_bandaware/checkpoints/full/best_model.pth
+       python plot_confusion.py --icbhi --ckpt sam_bandaware/checkpoints/ablation_baseline/best_model.pth \
+           --no_same_band_mix --no_band_importance --no_freq_weighted_lam --no_bandcl
+       # 可加 --binary 折叠成 2×2（Normal vs Adventitious）
+
 可选参数：
     --title "..."        图标题（默认按输入方式自动生成）
     --out fig.png         输出文件名（默认 conf_<来源>.png，也支持 .pdf）
@@ -84,6 +93,31 @@ def load_from_sprsound(ckpt_path, split):
     cm = evaluate(model, processor, X, y)
     title = f'SPRSound event-level 7-class ({split})'
     return np.array(cm, dtype=int), CLASS_NAMES, title
+
+
+# ---------------------------------------------------------------------------
+# 输入方式 4：ICBHI 4类 checkpoint（自动识别 main.py 字典包 / 裸 state_dict）
+# 推理复用 dump_icbhi_preds.py 的 dump_main / dump_bare，保证与验证逻辑一致
+# ---------------------------------------------------------------------------
+def load_from_icbhi(ckpt_path, args_in):
+    import torch
+    from dump_icbhi_preds import guess_format, dump_main, dump_bare
+
+    print(f'加载 checkpoint: {ckpt_path}')
+    ckpt = torch.load(ckpt_path, map_location='cpu')
+    fmt = guess_format(ckpt)
+    print(f'识别格式: {"main.py 字典包" if fmt == "main" else "裸 state_dict（sam_bandaware 系列）"}')
+
+    y_true, y_pred = dump_main(ckpt, args_in) if fmt == 'main' else dump_bare(ckpt, args_in)
+
+    n = max(int(y_true.max()), int(y_pred.max())) + 1
+    cm = np.zeros((n, n), dtype=int)
+    for t, p in zip(y_true, y_pred):
+        cm[t, p] += 1
+    labels = list(args_in.labels) if args_in.labels else ['Normal', 'Crackle', 'Wheeze', 'Both'][:n]
+    name = os.path.basename(os.path.dirname(os.path.abspath(ckpt_path)))
+    title = f'ICBHI 4-class ({name})'
+    return cm, labels, title
 
 
 # ---------------------------------------------------------------------------
@@ -205,12 +239,14 @@ def main():
     src.add_argument('--json', help='手动输入的 JSON 文件（模板 matrix_example.json）')
     src.add_argument('--sprsound', action='store_true', help='SPRSound 事件级：自动跑测试集')
     src.add_argument('--preds', help='npz 文件，含 y_true / y_pred 两个数组')
+    src.add_argument('--icbhi', action='store_true',
+                     help='ICBHI 4类：自动识别 checkpoint 格式（main.py 字典包 / 裸 state_dict），直接出图')
 
     ap.add_argument('--split', choices=['inter', 'intra', 'all'], default='inter',
                     help='SPRSound 测试子集（默认 inter）')
-    ap.add_argument('--ckpt', default='sam_original_sprsound/checkpoints/best_model.pth',
-                    help='SPRSound 模型权重路径')
-    ap.add_argument('--labels', nargs='*', help='类别名（preds 模式使用）')
+    ap.add_argument('--ckpt', default=None,
+                    help='模型权重路径（--sprsound / --icbhi 模式使用）')
+    ap.add_argument('--labels', nargs='*', help='类别名（preds / icbhi 模式使用）')
     ap.add_argument('--title', help='图标题')
     ap.add_argument('--out', help='输出文件（默认 conf_<来源>.png / .pdf）')
     ap.add_argument('--style', choices=['fig13', 'blues'], default='fig13')
@@ -218,14 +254,42 @@ def main():
     ap.add_argument('--figsize', type=float, default=6, help='图片宽度（英寸）')
     ap.add_argument('--binary', action='store_true',
                     help='折叠成 2×2（Normal vs Adventitious，仿论文 Task 1-1）')
+
+    # --icbhi 模式参数（与 dump_icbhi_preds.py / sam_bandaware/train.py 对齐）
+    ap.add_argument('--data-path',
+                    default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                         'sam_bandaware', 'icbhi_ast_16k_8s_metadata.npz'),
+                    help='[icbhi] 预处理数据 npz（裸权重格式使用）')
+    ap.add_argument('--test-fold', default=None,
+                    help='[icbhi] 覆盖 test_fold（仅 main.py 格式）')
+    ap.add_argument('--batch-size', type=int, default=None, help='[icbhi] 覆盖 batch_size')
+    ap.add_argument('--num-bands', type=int, default=4, help='[icbhi] 频段数（裸权重格式）')
+    ap.add_argument('--use_same_band_mix', action='store_true', default=True)
+    ap.add_argument('--no_same_band_mix', action='store_false', dest='use_same_band_mix')
+    ap.add_argument('--use_band_importance', action='store_true', default=True)
+    ap.add_argument('--no_band_importance', action='store_false', dest='use_band_importance')
+    ap.add_argument('--use_freq_weighted_lam', action='store_true', default=True)
+    ap.add_argument('--no_freq_weighted_lam', action='store_false', dest='use_freq_weighted_lam')
+    ap.add_argument('--use_bandcl', action='store_true', default=True)
+    ap.add_argument('--no_bandcl', action='store_false', dest='use_bandcl')
+    ap.add_argument('--band_importance_hidden_ratio', type=int, default=4)
+    ap.add_argument('--band_importance_temperature', type=float, default=1.0)
+    ap.add_argument('--bandcl_loss_type', type=str, default='mse', choices=['mse', 'l1', 'cos'])
     args = ap.parse_args()
 
     if args.json:
         counts, labels, title = load_from_json(args.json)
         default_out = os.path.splitext(args.json)[0] + '.png'
     elif args.sprsound:
-        counts, labels, title = load_from_sprsound(args.ckpt, args.split)
+        counts, labels, title = load_from_sprsound(
+            args.ckpt or 'sam_original_sprsound/checkpoints/best_model.pth', args.split)
         default_out = f'conf_sprsound_{args.split}.png'
+    elif args.icbhi:
+        if not args.ckpt:
+            ap.error('--icbhi 模式必须指定 --ckpt')
+        counts, labels, title = load_from_icbhi(args.ckpt, args)
+        name = os.path.basename(os.path.dirname(os.path.abspath(args.ckpt)))
+        default_out = f'conf_icbhi_{name}.png'
     else:
         counts, labels, title = load_from_preds(args.preds, args.labels)
         default_out = 'conf_' + os.path.splitext(os.path.basename(args.preds))[0] + '.png'
