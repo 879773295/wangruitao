@@ -156,16 +156,19 @@ def train(args):
         counts = np.sum(cm, axis=1)
         # S_p = Normal 类准确率
         sp = hits[0] / (counts[0] + 1e-10)
-        # S_e = 异常类准确率（每个异常类正确预测到自己类别）
+        # S_e(4c) = 异常类精确命中率（历史口径，best 沿用）
         se = np.sum(hits[1:]) / (np.sum(counts[1:]) + 1e-10)
         score = (se + sp) / 2
+        # 2-class 折叠口径（判成任一异常即命中）并列输出
+        se2 = np.sum(cm[1:, 1:]) / (np.sum(cm[1:, :]) + 1e-10)
+        score2 = (se2 + sp) / 2
 
         # 计算平均 loss
         avg_loss = running_loss / len(train_loader)
 
         # 打印结果
         print(f'\nEpoch {epoch+1}/{args.epochs}, Loss: {avg_loss:.4f}')
-        print(f' * S_p: {sp*100:.2f}, S_e: {se*100:.2f}, Score: {score*100:.2f}')
+        print(f' * S_p: {sp*100:.2f}, S_e(4c): {se*100:.2f}, Score(4c): {score*100:.2f} | S_e(2c): {se2*100:.2f}, Score(2c): {score2*100:.2f}')
 
         # 保存最优模型
         if score > best_score:

@@ -227,9 +227,28 @@ def plot_confusion(counts, labels, title, out, style='fig13',
         ax.legend(handles=handles, loc='upper left', bbox_to_anchor=(0, -0.06),
                   ncol=1, fontsize=8.5, frameon=False)
 
+    # 双口径分数标注（从计数直接算，写在图底部；论文贴图时数字自带）
+    #   2c = 异常类判成任一异常即算对（2-class 折叠）
+    #   4c = 异常类需精确命中（Patch-Mix Eq.1）
+    if counts.shape[0] == 2:  # --binary 折叠后两口径相同
+        sp_v = counts[0, 0] / max(counts[0, :].sum(), 1) * 100
+        se_v = counts[1, 1] / max(counts[1, :].sum(), 1) * 100
+        score_line = f'S_p {sp_v:.2f} | S_e {se_v:.2f} | Score {(sp_v + se_v) / 2:.2f} (binary)'
+    else:
+        abn = counts[1:, :].sum()
+        sp_v = counts[0, 0] / max(counts[0, :].sum(), 1) * 100
+        se2v = counts[1:, 1:].sum() / max(abn, 1) * 100
+        se4v = np.diag(counts)[1:].sum() / max(abn, 1) * 100
+        score_line = (f'S_p {sp_v:.2f} | Score(2c) {(sp_v + se2v) / 2:.2f} (S_e {se2v:.2f})'
+                      f' | Score(4c) {(sp_v + se4v) / 2:.2f} (S_e {se4v:.2f})')
+    ax.text(0.5, -0.175, score_line, transform=ax.transAxes, ha='center', va='top',
+            fontsize=8.5, color='#424242',
+            bbox=dict(boxstyle='round,pad=0.35', facecolor='#FAFAFA', edgecolor='#E0E0E0'))
+
     fig.tight_layout()
     fig.savefig(out, dpi=300, bbox_inches='tight')
     plt.close(fig)
+    print(f'双口径分数: {score_line}')
     print(f'已保存: {out}')
 
 

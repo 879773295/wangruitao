@@ -42,14 +42,18 @@ SAM_DIR = os.path.join(ROOT, 'sam_bandaware')
 
 
 def binary_score(y_true, y_pred):
-    """ICBHI 二分类口径：sp = 正常类召回, se = 异常类被预测为异常的比例"""
+    """双口径：sp 两者相同(正常类召回)；
+    se2c = 异常类被判成任一异常(2-class 折叠)；
+    se4c = 异常类精确命中(Patch-Mix Eq.1)
+    返回 (sp, se2c, score2c, acc, se4c, score4c)，单位 %"""
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
     sp = np.mean(y_pred[y_true == 0] == 0) * 100 if (y_true == 0).any() else 0.0
     ab = y_true > 0
-    se = np.mean(y_pred[ab] > 0) * 100 if ab.any() else 0.0
+    se2 = np.mean(y_pred[ab] > 0) * 100 if ab.any() else 0.0
+    se4 = np.mean(y_pred[ab] == y_true[ab]) * 100 if ab.any() else 0.0
     acc = np.mean(y_true == y_pred) * 100
-    return sp, se, (sp + se) / 2, acc
+    return sp, se2, (sp + se2) / 2, acc, se4, (sp + se4) / 2
 
 
 def guess_format(ckpt):
@@ -220,8 +224,8 @@ def main():
     for row in cm:
         print('  ' + ' '.join(f'{v:5d}' for v in row))
 
-    sp, se, sc, acc = binary_score(y_true, y_pred)
-    print(f'\n * S_p: {sp:.2f}, S_e: {se:.2f}, Score: {sc:.2f}, Acc: {acc:.2f}')
+    sp, se2, sc2, acc, se4, sc4 = binary_score(y_true, y_pred)
+    print(f'\n * S_p: {sp:.2f}, S_e(2c): {se2:.2f}, Score(2c): {sc2:.2f} | S_e(4c): {se4:.2f}, Score(4c): {sc4:.2f}, Acc: {acc:.2f}')
 
 
 if __name__ == '__main__':

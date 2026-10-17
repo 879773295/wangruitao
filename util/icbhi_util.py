@@ -505,4 +505,18 @@ def get_score(hits, counts, pflag=False):
         print("S_p: {}, S_e: {}, Score: {}".format(sp, se, sc))
 
     return sp, se, sc
+
+
+def get_score_both(preds, labels):
+    """双口径评分：4-class=异常类精确命中(Patch-Mix Eq.1)；2-class=判成任一异常。
+    返回 (sp, se4, se2, score4, score2)，单位 %。"""
+    preds = np.asarray(preds)
+    labels = np.asarray(labels)
+    abn = labels > 0
+    n0 = max(int((labels == 0).sum()), 1)
+    na = max(int(abn.sum()), 1)
+    sp = float((preds[labels == 0] == 0).sum()) / n0 * 100
+    se4 = float(((preds == labels) & abn).sum()) / na * 100
+    se2 = float(((preds > 0) & abn).sum()) / na * 100
+    return sp, se4, se2, (sp + se4) / 2, (sp + se2) / 2
 # ==========================================================================

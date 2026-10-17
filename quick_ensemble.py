@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from copy import deepcopy
 import main as M
 from util.icbhi_dataset import ICBHIDataset
-from util.icbhi_util import get_score
+from util.icbhi_util import get_score, get_score_both
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
@@ -84,27 +84,24 @@ def main():
         logits = w * logits_baseline + (1 - w) * logits_supcon
         preds = torch.argmax(logits, dim=1)
 
-        hits = [0.0] * 4
-        counts = [0.0] * 4
-        for pred, label in zip(preds, labels):
-            counts[label.item()] += 1.0
-            if pred.item() == label.item():
-                hits[label.item()] += 1.0
-
-        sp, se, sc = get_score(hits, counts)
+        preds_np = preds.cpu().numpy()
+        labels_np = labels.cpu().numpy() if hasattr(labels, 'cpu') else np.asarray(labels)
+        # 双口径：best 仍按 4c（历史口径），2c 同行显示
+        sp, se4, se2, sc4, sc2 = get_score_both(preds_np, labels_np)
+        se, sc = se4, sc4
 
         if sc > best_score:
             best_score = sc
             best_sp = sp
             best_se = se
             best_w = w
-            print(f"  w_baseline={w:.2f}, w_supcon={1-w:.2f} -> S_p={sp:.2f}, S_e={se:.2f}, Score={sc:.2f} ★")
+            print(f"  w_baseline={w:.2f}, w_supcon={1-w:.2f} -> S_p={sp:.2f}, Score(4c)={sc:.2f} | Score(2c)={sc2:.2f} ★")
 
     # 5. 打印结果
     print(f"\n{'='*60}")
     print(f"最优权重: w_baseline={best_w:.2f}, w_supcon={1-best_w:.2f}")
-    print(f"Score: {best_score:.2f}")
-    print(f"S_p: {best_sp:.2f}, S_e: {best_se:.2f}")
+    print(f"Score(4c): {best_score:.2f}")
+    print(f"S_p: {best_sp:.2f}, S_e(4c): {best_se:.2f}")
     print(f"{'='*60}")
 
     # 对比

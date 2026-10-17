@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import main as M
-from util.icbhi_util import get_score
+from util.icbhi_util import get_score, get_score_both
 
 
 def strip_module(state_dict):
@@ -45,16 +45,13 @@ def collect_logits(val_loader, model, classifier):
 
 
 def sp_se_score(logits, labels, n_cls):
-    """复刻 util/icbhi_util.py:get_score 的语义：S_p=normal 准确率，S_e=异常类准确率"""
+    """双口径：返回 (sp, se4, sc4, se2, sc2)。
+    4c=异常类精确命中(Patch-Mix Eq.1)；2c=判成任一异常(2-class折叠)。"""
     preds = logits.argmax(1)
-    hits = [0.0] * n_cls
-    counts = [0.0] * n_cls
-    for l in labels:
-        counts[int(l)] += 1.0
-    for p, l in zip(preds, labels):
-        if int(p) == int(l):
-            hits[int(l)] += 1.0
-    return get_score(hits, counts)
+    preds = preds.numpy() if hasattr(preds, 'numpy') else np.asarray(preds)
+    lab = labels.numpy() if hasattr(labels, 'numpy') else np.asarray(labels)
+    sp, se4, se2, sc4, sc2 = get_score_both(preds, lab)
+    return sp, se4, sc4, se2, sc2
 
 
 def per_class_accuracy(logits, labels, n_cls):
@@ -93,21 +90,21 @@ def main():
     logits, labels = collect_logits(val_loader, model, classifier)
 
     # 基线（argmax，bias=0）
-    sp0, se0, sc0 = sp_se_score(logits, labels, train_args.n_cls)
+    sp0, se0, sc0, se20, sc20 = sp_se_score(logits, labels, train_args.n_cls)
     print('\n[per-class acc, argmax] ', end='')
     for c, a in per_class_accuracy(logits, labels, train_args.n_cls).items():
         print('{}={:.1f} '.format(train_args.cls_list[c], a), end='')
-    print('\nbaseline (argmax):  S_p={:.2f}  S_e={:.2f}  Score={:.2f}'.format(sp0, se0, sc0))
+    print('\nbaseline (argmax):  S_p={:.2f}  S_e(4c)={:.2f}  Score(4c)={:.2f}  |  S_e(2c)={:.2f}  Score(2c)={:.2f}'.format(sp0, se0, sc0, se20, sc20))
 
     best = (-1, None, None, None)
     results = []
     for b in np.linspace(args.bias_min, args.bias_max, args.bias_step):
         adj = logits.clone()
         adj[:, 0] = adj[:, 0] + b  # 负 b 压低 normal logit → 更多判为异常
-        sp, se, sc = sp_se_score(adj, labels, train_args.n_cls)
+        sp, se, sc, se2, sc2 = sp_se_score(adj, labels, train_args.n_cls)
         results.append((sc, b, sp, se))
         if sc > best[0]:
-            best = (sc, b, sp, se)
+            best = (sc, b, sp, se, se2, sc2)
 
     results.sort(reverse=True)
     print('\ntop-5 决策点 (对 normal 类 logit 加偏置):')
@@ -115,8 +112,8 @@ def main():
     for sc, b, sp, se in results[:5]:
         print('  {:+6.3f}  {:5.2f}  {:5.2f}  {:6.2f}'.format(b, sp, se, sc))
 
-    sc, b, sp, se = best
-    print('\n>>> 最优阈值: bias={:+.3f} -> S_p={:.2f}, S_e={:.2f}, Score={:.2f}'.format(b, sp, se, sc))
+    sc, b, sp, se, se2, sc2 = best
+    print('\n>>> 最优阈值: bias={:+.3f} -> S_p={:.2f}, S_e(4c)={:.2f}, Score(4c)={:.2f} | S_e(2c)={:.2f}, Score(2c)={:.2f}'.format(b, sp, se, sc, se2, sc2))
     print('>>> 相对 argmax: {:.2f} -> {:.2f}  ({:+.2f})'.format(sc0, sc, sc - sc0))
 
 

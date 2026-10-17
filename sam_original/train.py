@@ -99,14 +99,17 @@ def train(args):
 
         
         cm = confusion_matrix(all_labels, all_preds)
+        # 双口径：4c=异常类对角线精确命中(Patch-Mix Eq.1)；2c=判成任一异常(2-class折叠)
+        se4 = np.diag(cm)[1:].sum() / np.sum(cm[1:, :]) if np.sum(cm[1:, :]) > 0 else 0
         se = np.sum(cm[1:, 1:]) / np.sum(cm[1:, :]) if np.sum(cm[1:, :]) > 0 else 0
         sp = cm[0, 0] / np.sum(cm[0, :]) if np.sum(cm[0, :]) > 0 else 0
+        score4 = (se4 + sp) / 2
         score = (se + sp) / 2
 
         # 计算平均 loss
         avg_loss = running_loss / len(train_loader)
         print(f'Epoch {epoch+1}/{args.epochs}, Loss: {avg_loss:.4f}')
-        print(f' * S_p: {sp*100:.2f}, S_e: {se*100:.2f}, Score: {score*100:.2f}')
+        print(f' * S_p: {sp*100:.2f}, S_e(2c): {se*100:.2f}, Score(2c): {score*100:.2f} | S_e(4c): {se4*100:.2f}, Score(4c): {score4*100:.2f}')
 
         # 保存最优模型
         if score > best_score:
@@ -115,9 +118,9 @@ def train(args):
             best_se = se
             save_path = os.path.join(args.checkpoint_dir, "best_model.pth")
             torch.save(model.state_dict(), save_path)
-            print(f'   * New best: S_p: {sp*100:.2f}, S_e: {se*100:.2f}, Score: {score*100:.2f}')
+            print(f'   * New best: S_p: {sp*100:.2f}, Score(2c): {score*100:.2f}, Score(4c): {score4*100:.2f}')
 
-    print(f'\n * Best Score: {best_score*100:.2f} (S_p: {best_sp*100:.2f}, S_e: {best_se*100:.2f})')
+    print(f'\n * Best Score(2c): {best_score*100:.2f} (S_p: {best_sp*100:.2f}, S_e: {best_se*100:.2f})  [best 按 2c 选择]')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train AST model with SAM for ICBHI")

@@ -17,7 +17,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import main as M
-from util.icbhi_util import get_score
+from util.icbhi_util import get_score, get_score_both
 from util.augmentation import SpecAugment
 
 
@@ -26,15 +26,12 @@ def strip_module(sd):
 
 
 def sp_se_score(logits, labels, n_cls):
+    """双口径：返回 (sp, se4, sc4, se2, sc2)。4c=精确命中；2c=任一异常。"""
     preds = logits.argmax(1)
-    hits = [0.0] * n_cls
-    counts = [0.0] * n_cls
-    for l in labels:
-        counts[int(l)] += 1.0
-    for p, l in zip(preds, labels):
-        if int(p) == int(l):
-            hits[int(l)] += 1.0
-    return get_score(hits, counts)
+    preds = preds.numpy() if hasattr(preds, 'numpy') else np.asarray(preds)
+    lab = labels.numpy() if hasattr(labels, 'numpy') else np.asarray(labels)
+    sp, se4, se2, sc4, sc2 = get_score_both(preds, lab)
+    return sp, se4, sc4, se2, sc2
 
 
 def per_class(logits, labels, n_cls, cls_list):
@@ -98,25 +95,25 @@ def main():
     logits = torch.stack(all_logits).mean(0)
 
     print('\n[per-class acc, ensemble argmax]', {k: round(v, 1) for k, v in per_class(logits, all_labels, n_cls, cls_list).items()})
-    sp0, se0, sc0 = sp_se_score(logits, all_labels, n_cls)
-    print('ensemble (argmax):  S_p={:.2f}  S_e={:.2f}  Score={:.2f}'.format(sp0, se0, sc0))
+    sp0, se0, sc0, se20, sc20 = sp_se_score(logits, all_labels, n_cls)
+    print('ensemble (argmax):  S_p={:.2f}  S_e(4c)={:.2f}  Score(4c)={:.2f}  |  S_e(2c)={:.2f}  Score(2c)={:.2f}'.format(sp0, se0, sc0, se20, sc20))
 
     results = []
     for b in np.linspace(args.bias_min, args.bias_max, args.bias_step):
         adj = logits.clone()
         adj[:, 0] += b
-        sp, se, sc = sp_se_score(adj, all_labels, n_cls)
-        results.append((sc, b, sp, se))
+        sp, se, sc, se2, sc2 = sp_se_score(adj, all_labels, n_cls)
+        results.append((sc, b, sp, se, se2, sc2))
     results.sort(reverse=True)
 
     print('\ntop-5 (bias on normal logit):')
     print('  bias      S_p     S_e     Score')
-    for sc, b, sp, se in results[:5]:
+    for sc, b, sp, se, _se2, _sc2 in results[:5]:
         print('  {:+6.3f}  {:5.2f}  {:5.2f}  {:6.2f}'.format(b, sp, se, sc))
 
-    sc, b, sp, se = results[0]
-    print('\n>>> best: bias={:+.3f} -> S_p={:.2f}, S_e={:.2f}, Score={:.2f}  (argmax {:.2f}, +{:.2f})'.format(
-        b, sp, se, sc, sc0, sc - sc0))
+    sc, b, sp, se, se2, sc2 = results[0]
+    print('\n>>> best: bias={:+.3f} -> S_p={:.2f}, S_e(4c)={:.2f}, Score(4c)={:.2f} | S_e(2c)={:.2f}, Score(2c)={:.2f}  (argmax4c {:.2f}, +{:.2f})'.format(
+        b, sp, se, sc, se2, sc2, sc0, sc - sc0))
 
 
 if __name__ == '__main__':

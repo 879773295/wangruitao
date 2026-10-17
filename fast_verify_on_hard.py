@@ -21,7 +21,7 @@ from copy import deepcopy
 
 import main as M
 from util.icbhi_dataset import ICBHIDataset
-from util.icbhi_util import get_score
+from util.icbhi_util import get_score, get_score_both
 from util.augmentation import SpecAugment
 
 
@@ -136,6 +136,7 @@ def evaluate(model, classifier, val_loader, args):
 
     hits = [0.0] * args.n_cls
     counts = [0.0] * args.n_cls
+    abn_total, abn_any = 0.0, 0.0  # 双口径
 
     with torch.no_grad():
         for images, labels, metadata in val_loader:
@@ -151,8 +152,15 @@ def evaluate(model, classifier, val_loader, args):
                 counts[labels[i].item()] += 1.0
                 if preds[i].item() == labels[i].item():
                     hits[labels[i].item()] += 1.0
+                if labels[i].item() != 0:
+                    abn_total += 1.0
+                    if preds[i].item() > 0:
+                        abn_any += 1.0
 
     sp, se, sc = get_score(hits, counts)
+    se2 = abn_any / (abn_total + 1e-10) * 100
+    sc2 = (sp + se2) / 2
+    print(f"  [dual] S_p={sp:.2f} Score(4c)={sc:.2f} | S_e(2c)={se2:.2f} Score(2c)={sc2:.2f}")
     return sp, se, sc
 
 

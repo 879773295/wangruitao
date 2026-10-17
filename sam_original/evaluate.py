@@ -82,22 +82,19 @@ def evaluate(args):
     cm = confusion_matrix(all_targets, all_preds)
 
    
-    se_numerator = np.sum(cm[1:, 1:])  
-    se_denominator = np.sum(cm[1:, :]) 
-    se = se_numerator / se_denominator if se_denominator > 0 else 0
-
-  
-    sp_numerator = cm[0, 0]           
-    sp_denominator = np.sum(cm[0, :]) 
-    sp = sp_numerator / sp_denominator if sp_denominator > 0 else 0
-
-
+    # 双口径：4c=异常类对角线精确命中(Patch-Mix Eq.1)；2c=判成任一异常(2-class折叠)
+    se_denominator = np.sum(cm[1:, :])
+    se4 = np.diag(cm)[1:].sum() / se_denominator if se_denominator > 0 else 0
+    se = np.sum(cm[1:, 1:]) / se_denominator if se_denominator > 0 else 0
+    sp_denominator = np.sum(cm[0, :])
+    sp = cm[0, 0] / sp_denominator if sp_denominator > 0 else 0
+    score4 = (se4 + sp) / 2
     score = (se + sp) / 2
 
-    print(f"\n📊 Metrics:")
-    print(f"   Sensitivity (Se): {se:.4f} ({se*100:.2f}%)")
-    print(f"   Specificity (Sp): {sp:.4f} ({sp*100:.2f}%)")
-    print(f"   Score:            {score:.4f} ({score*100:.2f}%)")
+    print(f"\n📊 Metrics (dual convention):")
+    print(f"   S_p (shared):          {sp*100:.2f}%")
+    print(f"   S_e 4-class exact:     {se4*100:.2f}%   Score(4c): {score4*100:.2f}%")
+    print(f"   S_e 2-class abnormal:  {se*100:.2f}%   Score(2c): {score*100:.2f}%")
 
     if args.output_dir:
         print("\n🎨 Confusion Matrix Creating")

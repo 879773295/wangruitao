@@ -87,10 +87,11 @@ def report(name, cm):
     n = cm.shape[0]
     sp = cm[0, 0] / cm[0, :].sum() if cm[0, :].sum() > 0 else 0
     se = cm[1:, 1:].sum() / cm[1:, :].sum() if cm[1:, :].sum() > 0 else 0
+    se4 = np.diag(cm)[1:].sum() / cm[1:, :].sum() if cm[1:, :].sum() > 0 else 0
     acc = np.diag(cm).sum() / cm.sum()
     pca = per_class_accuracy(cm)
     print(f'\n=== {name} ===  样本数: {int(cm.sum())}')
-    print(f'  S_p: {sp*100:.2f}  S_e: {se*100:.2f}  Score: {(sp+se)/2*100:.2f}  Acc: {acc*100:.2f}')
+    print(f'  S_p: {sp*100:.2f}  S_e(2c): {se*100:.2f}  Score(2c): {(sp+se)/2*100:.2f}  |  S_e(4c): {se4*100:.2f}  Score(4c): {(sp+se4)/2*100:.2f}  Acc: {acc*100:.2f}')
     pca_str = '  '.join(f'{CLASS_NAMES[i]}={pca[i]*100:.1f}' for i in range(n))
     print(f'  各类: {pca_str}')
 

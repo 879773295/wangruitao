@@ -260,6 +260,9 @@ def train(args):
         # S_e = 异常类（类 1-6）正确预测占比
         se = np.sum(cm[1:, 1:]) / np.sum(cm[1:, :]) if np.sum(cm[1:, :]) > 0 else 0
         score = (se + sp) / 2
+        # 4-class 口径（异常类对角线精确命中）并列输出
+        se4 = np.diag(cm)[1:].sum() / np.sum(cm[1:, :]) if np.sum(cm[1:, :]) > 0 else 0
+        score4 = (se4 + sp) / 2
         # 7 类总体 accuracy
         acc = np.sum(np.diag(cm)) / np.sum(cm)
         # 各类准确率
@@ -267,7 +270,7 @@ def train(args):
 
         avg_loss = running_loss / max(n_run, 1)
         print(f'Epoch {epoch+1}/{args.epochs}, Loss: {avg_loss:.4f}')
-        print(f' * S_p: {sp*100:.2f}, S_e: {se*100:.2f}, Score: {score*100:.2f}, Acc: {acc*100:.2f}')
+        print(f' * S_p: {sp*100:.2f}, S_e(2c): {se*100:.2f}, Score(2c): {score*100:.2f} | S_e(4c): {se4*100:.2f}, Score(4c): {score4*100:.2f}, Acc: {acc*100:.2f}')
         pca_str = '  '.join(f'{CLASS_NAMES[i]}={pca[i]*100:.1f}' for i in range(len(pca)))
         print(f' * 各类准确率: {pca_str}')
 

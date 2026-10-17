@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import main as M
+from util.icbhi_util import get_score_both
 from util.icbhi_dataset import ICBHIDataset
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -97,19 +98,17 @@ def main():
     # 计算 Score
     hits = [0.0] * model_args.n_cls
     counts = [0.0] * model_args.n_cls
-    for pred, label in zip(preds, labels):
-        counts[label.item()] += 1.0
-        if pred.item() == label.item():
-            hits[label.item()] += 1.0
-
-    sp, se, sc = get_score(hits, counts)
+    preds_np = preds.cpu().numpy() if hasattr(preds, 'cpu') else np.asarray(preds)
+    labels_np = labels.cpu().numpy() if hasattr(labels, 'cpu') else np.asarray(labels)
+    sp, se4, se2, sc4, sc2 = get_score_both(preds_np, labels_np)
+    se, sc = se4, sc4
 
     print(f"\n{'='*60}")
     print(f"零样本分类结果")
     print(f"{'='*60}")
     print(f"S_p: {sp:.2f}%")
-    print(f"S_e: {se:.2f}%")
-    print(f"Score: {sc:.2f}")
+    print(f"S_e(4c): {se4:.2f}%  Score(4c): {sc4:.2f}%")
+    print(f"S_e(2c): {se2:.2f}%  Score(2c): {sc2:.2f}%")
     print(f"{'='*60}")
 
     # 对比监督学习

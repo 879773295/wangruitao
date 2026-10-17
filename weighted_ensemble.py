@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import main as M
 from util.icbhi_dataset import ICBHIDataset
-from util.icbhi_util import get_score
+from util.icbhi_util import get_score, get_score_both
 
 
 def load_model(ckpt_path, model_args):
@@ -76,19 +76,12 @@ def evaluate_weighted_ensemble(logits_list, labels, weights):
         weighted_logits += w * logit
 
     # 预测
-    probs = F.softmax(weighted_logits, dim=1)
-    preds = torch.argmax(probs, dim=1)
+    preds = torch.argmax(weighted_logits, dim=1)
 
-    # 计算 Score
-    hits = [0.0] * 4
-    counts = [0.0] * 4
-    for pred, label in zip(preds, labels):
-        counts[label.item()] += 1.0
-        if pred.item() == label.item():
-            hits[label.item()] += 1.0
-
-    sp, se, sc = get_score(hits, counts)
-    return sp, se, sc
+    # 双口径（4c=精确命中；2c=任一异常）
+    preds_np = preds.cpu().numpy()
+    labels_np = labels.cpu().numpy() if hasattr(labels, 'cpu') else np.asarray(labels)
+    return get_score_both(preds_np, labels_np)  # (sp, se4, se2, sc4, sc2)
 
 
 def main():
@@ -158,7 +151,9 @@ def main():
         w2 = 1.0 - w1  # SupCon 权重
         weights = [w1, w2]
 
-        sp, se, sc = evaluate_weighted_ensemble([logits_baseline, logits_supcon], labels, weights)
+        sp, se4, se2, sc4, sc2 = evaluate_weighted_ensemble([logits_baseline, logits_supcon], labels, weights)
+        se, sc = se4, sc4  # best 仍按 4c（历史口径）
+        print(f"  w1={w1:.1f} -> S_p={sp:.2f} Score(4c)={sc:.2f} | Score(2c)={sc2:.2f}")
 
         if sc > best_score:
             best_score = sc
