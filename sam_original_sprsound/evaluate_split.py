@@ -8,6 +8,7 @@ intra-test：162 患者，100% 与训练集重叠 → 患者内表现 / 泄露�
 """
 
 import os
+import sys
 import json
 import numpy as np
 import torch
@@ -100,7 +101,9 @@ def main():
     device = 'cuda'
     print('加载模型...')
     model = CustomAST(num_classes=7).to(device)
-    model.load_state_dict(torch.load('checkpoints/best_model.pth', map_location=device))
+    _ckpt = sys.argv[1] if len(sys.argv) > 1 else 'checkpoints/best_model.pth'
+    print(f'checkpoint: {_ckpt}')
+    model.load_state_dict(torch.load(_ckpt, map_location=device))
     model.eval()
 
     processor = ASTFeatureExtractor.from_pretrained('MIT/ast-finetuned-audioset-10-10-0.4593')

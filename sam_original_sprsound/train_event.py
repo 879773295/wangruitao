@@ -161,13 +161,19 @@ def train(args):
     processor = ASTFeatureExtractor.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
 
     counts = np.bincount(y_train)
-    weights = [1.0 / counts[y] for y in y_train]
-    sampler = WeightedRandomSampler(weights, len(y_train))
+    if args.use_wrs:
+        weights = [1.0 / counts[y] for y in y_train]
+        sampler = WeightedRandomSampler(weights, len(y_train))
+        print("采样器: WeightedRandomSampler (WRS)")
+    else:
+        sampler = None
+        print("采样器: 无（普通随机采样，消融用）")
 
     train_loader = DataLoader(
         ASTDataset(X_train, y_train, processor, train=True),
         batch_size=args.batch_size,
         sampler=sampler,
+        shuffle=(sampler is None),
     )
     test_loader = DataLoader(
         ASTDataset(X_test, y_test, processor, train=False),
@@ -191,8 +197,14 @@ def train(args):
     ).to(DEVICE)
 
     base_optimizer = torch.optim.AdamW
-    optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, rho=0.05, weight_decay=1e-4)
+    if args.use_sam:
+        optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, rho=0.05, weight_decay=1e-4)
+        print("优化器: SAM(AdamW, rho=0.05)")
+    else:
+        optimizer = base_optimizer(model.parameters(), lr=args.lr, weight_decay=1e-4)
+        print("优化器: AdamW（单步，消融用）")
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     print("Train begins")
     best_score = 0.0
@@ -227,15 +239,19 @@ def train(args):
                 logits = model(inputs, patch_mix=False)[0]
                 loss = criterion(logits, labels)
             loss.backward()
-            optimizer.first_step(zero_grad=True)
+            if args.use_sam:
+                optimizer.first_step(zero_grad=True)
 
-            # SAM 第二步：重新前向（与 5 类版一致，第二步只用 CE）
-            if args.use_patch_mix:
-                logits2 = model(inputs, patch_mix=True, mix_lam=args.mix_lam)[0]
+                # SAM 第二步：重新前向（与 5 类版一致，第二步只用 CE）
+                if args.use_patch_mix:
+                    logits2 = model(inputs, patch_mix=True, mix_lam=args.mix_lam)[0]
+                else:
+                    logits2 = model(inputs, patch_mix=False)[0]
+                criterion(logits2, labels).backward()
+                optimizer.second_step(zero_grad=True)
             else:
-                logits2 = model(inputs, patch_mix=False)[0]
-            criterion(logits2, labels).backward()
-            optimizer.second_step(zero_grad=True)
+                optimizer.step()
+                optimizer.zero_grad()
 
             running_loss += loss.item()
             progress_bar.set_postfix({'Loss': f'{loss.item():.4f}'})
@@ -326,6 +342,16 @@ if __name__ == "__main__":
                         help=">0 时每个 epoch 只训前 N 个 batch（0 = 全部）")
     parser.add_argument("--test_limit", type=int, default=0,
                         help=">0 时只用前 N 条测试样本评估（0 = 全部）")
+
+    # ---- 原版消融开关（论文阶梯：AST → +WRS → +SAM；默认全开=论文最终配置） ----
+    parser.add_argument("--use_wrs", action="store_true", default=True,
+                        help="训练用 WeightedRandomSampler（论文默认开）")
+    parser.add_argument("--no_wrs", action="store_false", dest="use_wrs",
+                        help="关掉 WRS（消融用，改普通随机采样）")
+    parser.add_argument("--use_sam", action="store_true", default=True,
+                        help="SAM 两步优化（论文默认开）")
+    parser.add_argument("--no_sam", action="store_false", dest="use_sam",
+                        help="关掉 SAM（消融用，改 AdamW 单步）")
 
     args = parser.parse_args()
     train(args)
