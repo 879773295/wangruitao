@@ -62,3 +62,44 @@ python evaluate_split.py checkpoints/ast_adamw/best_model.pth                   
 - 训练日志（双口径逐 epoch）：`ablation_ast_adamw.txt`、`ablation_ast_wrs.txt`（③ 见 `train_log.txt`，旧版单口径）
 - 分层评估：`eval_inter_intra_row{1,2,3}.txt`
 - checkpoint：`checkpoints/ast_adamw/`、`checkpoints/ast_wrs/`（各 345MB，不入库）
+
+---
+
+# 方法 2.5 × SPRSound 7 分类（2026-10-19/20，README 方法 2.5 协议）
+
+**方法 2.5 定义**（README:455）：原版模型 + 四个消融模块（Adam 优化器，无 SAM）。
+本实验将其落到 `train_event.py`（新增 `--optimizer {adamw,adam}` / `--weight_decay` 开关），
+协议取 README 命令：**Adam, lr 5e-5, wd 1e-6, 无 SAM, bandcl_weight=1.0**；
+其余（CE label_smoothing 0.1、WRS 开、波形增广、20 epochs、batch 8）与本文件上半部分三行保持一致，
+使两行之差 = 纯四模块效应。
+
+## 复现命令
+
+```bash
+# m25_base：四模块关
+python train_event.py --no_sam --optimizer adam --lr 5e-5 --weight_decay 1e-6 \
+  --bandcl_weight 1.0 --epochs 20 --checkpoint_dir ./checkpoints/m25_base
+# m25_full：四模块开
+python train_event.py --use_patch_mix --use_same_band_mix --use_band_importance \
+  --use_freq_weighted_lam --use_bandcl --bandcl_weight 1.0 --no_sam \
+  --optimizer adam --lr 5e-5 --weight_decay 1e-6 --epochs 20 \
+  --checkpoint_dir ./checkpoints/m25_full
+```
+
+## 结果（inter-only = 论文口径）
+
+| 配置 | S_p | S_e(2c) | Score(2c) | S_e(4c) | Score(4c) | Acc |
+|---|---|---|---|---|---|---|
+| m25_base（四模块关） | 88.37 | 94.86 | **91.61** | 82.78 | 85.57 | 86.84 |
+| m25_full（四模块开） | 87.40 | 94.09 | **90.75** | 80.21 | 83.80 | 85.44 |
+| **四模块净效应** | −1.0 | −0.8 | **−0.86** | −2.6 | −1.77 | −1.40 |
+
+intra-only：base 88.32 → full 90.02（+1.70，2c）；合并测试集：89.99 → 90.37（+0.38）。
+训练日志：`m25_base.txt`、`m25_full.txt`；分层评估：`eval_inter_intra_m25_*.txt`。
+
+## 结论（SPRSound 7 分类，全部单种子）
+
+1. **四模块在方法 2.5 协议下 inter-only 净 −0.86（2c）/ −1.77（4c）**——与 README 方法2（SAM+模块）Exp 表"+0.06/−0.81"同方向：四模块无可分辨收益；
+2. **协议影响大于模块**：A 协议（Adam 5e-5）整体比 AdamW 1e-5 协议低约 1~1.5 分；
+3. inter-only 2c 总排名：WRS+AdamW(93.20) > 纯AdamW(92.75) > WRS+SAM(92.53) > m25_base(91.61) > m25_full(90.75)——**原版简单配置全面不劣于带模块/SAM 的复杂配置**；
+4. 双口径在 intra 上会翻转结论（m25_full intra +1.70 但 inter −0.86）——论文必须声明口径。

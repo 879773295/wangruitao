@@ -79,7 +79,8 @@ def evaluate(model, processor, X, y, batch_size=8):
     for i in tqdm(range(0, len(X), batch_size), desc='评估', leave=False):
         batch = X[i:i+batch_size]
         inp = torch.stack([processor(w, sampling_rate=16000, return_tensors='pt').input_values.squeeze(0) for w in batch]).to(device)
-        logits = model(inp)
+        out = model(inp)
+        logits = out[0] if isinstance(out, (tuple, list)) else out
         preds.extend(torch.argmax(logits, dim=1).cpu().numpy())
     return confusion_matrix(y, np.array(preds))
 
@@ -100,10 +101,18 @@ def report(name, cm):
 def main():
     device = 'cuda'
     print('加载模型...')
-    model = CustomAST(num_classes=7).to(device)
     _ckpt = sys.argv[1] if len(sys.argv) > 1 else 'checkpoints/best_model.pth'
     print(f'checkpoint: {_ckpt}')
-    model.load_state_dict(torch.load(_ckpt, map_location=device))
+    _state = torch.load(_ckpt, map_location=device)
+    if any(str(k).startswith('band_importance_estimator') for k in _state):
+        # 带 Band Importance 参数的 ckpt（四模块开）：按训练开关构建 BandAware 模型
+        from model_bandaware import build_model
+        model = build_model(num_classes=7, use_same_band_mix=True, use_band_importance=True,
+                            use_freq_weighted_lam=True, use_bandcl=True).to(device)
+        print('模型: BandAware build_model（四模块开，按 ckpt 键自动选择）')
+    else:
+        model = CustomAST(num_classes=7).to(device)
+    model.load_state_dict(_state)
     model.eval()
 
     processor = ASTFeatureExtractor.from_pretrained('MIT/ast-finetuned-audioset-10-10-0.4593')

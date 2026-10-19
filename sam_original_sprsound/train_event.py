@@ -196,13 +196,14 @@ def train(args):
         bandcl_loss_type=args.bandcl_loss_type,
     ).to(DEVICE)
 
-    base_optimizer = torch.optim.AdamW
+    base_optimizer = torch.optim.AdamW if args.optimizer == "adamw" else torch.optim.Adam
     if args.use_sam:
-        optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, rho=0.05, weight_decay=1e-4)
-        print("优化器: SAM(AdamW, rho=0.05)")
+        optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, rho=0.05,
+                        weight_decay=args.weight_decay)
+        print(f"优化器: SAM({args.optimizer}, rho=0.05, wd={args.weight_decay})")
     else:
-        optimizer = base_optimizer(model.parameters(), lr=args.lr, weight_decay=1e-4)
-        print("优化器: AdamW（单步，消融用）")
+        optimizer = base_optimizer(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        print(f"优化器: {args.optimizer}（单步, lr={args.lr}, wd={args.weight_decay}）")
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     os.makedirs(args.checkpoint_dir, exist_ok=True)
 
@@ -351,7 +352,12 @@ if __name__ == "__main__":
     parser.add_argument("--use_sam", action="store_true", default=True,
                         help="SAM 两步优化（论文默认开）")
     parser.add_argument("--no_sam", action="store_false", dest="use_sam",
-                        help="关掉 SAM（消融用，改 AdamW 单步）")
+                        help="关掉 SAM（消融用，改单步优化器）")
+    # 协议选择：adamw=本脚本/Geometry-Aware 协议（默认，行为不变）；adam=README 方法2.5 协议
+    parser.add_argument("--optimizer", choices=["adamw", "adam"], default="adamw",
+                        help="no_sam 时的基础优化器；方法2.5 严格协议用 adam")
+    parser.add_argument("--weight_decay", type=float, default=1e-4,
+                        help="weight decay（方法2.5/README 命令为 1e-6）")
 
     args = parser.parse_args()
     train(args)
