@@ -1373,3 +1373,45 @@ python plot_confusion.py --sprsound --split all    --binary                     
 
 - [Patch-Mix Contrastive Learning](https://arxiv.org/abs/2305.14032)（INTERSPEECH 2023）
 - [ICBHI-AST-SAM](https://github.com/Atakanisik/ICBHI-AST-SAM)（SAM 优化器）
+
+---
+
+## SPRSound 7 分类补充消融：原版阶梯 + 方法 2.5（2026-10-18/20，RTX 4090，双口径）
+
+> 完整协议、复现命令、intra/合并分层表见 [`sam_original_sprsound/ablation_results.md`](sam_original_sprsound/ablation_results.md)。
+> **双口径**：`2c` = 异常类判成任一异常即命中（2-class 折叠，论文 EVALUATION METRICS 的 TP 定义）；
+> `4c` = 异常类需精确命中（Patch-Mix 公式 (1)）。两套并列输出，本表全部为 **inter-only（1429 事件，无泄露）**。
+
+### 三组实验一览（同一 `sprsound_event_7class.npz`、20 epochs、batch 8、WRS 开）
+
+| 组 | 行 | 配置 | 协议 | Score(2c) | Score(4c) | Acc |
+|---|---|---|---|---|---|---|
+| 原版阶梯 | ① | AST + CE | AdamW 1e-5 | 92.75 | 86.33 | 87.47 |
+| 原版阶梯 | ② | + WRS | AdamW 1e-5 | **93.20** | **87.80** | 88.10 |
+| 原版阶梯 | ③ | + WRS + SAM（论文配置） | SAM 1e-5 | 92.53 | 87.13 | 88.52 |
+| 方法 2.5 | base | 四模块关 | **Adam 5e-5 / wd 1e-6（README 2.5 协议）** | 91.61 | 85.57 | 86.84 |
+| 方法 2.5 | full | 四模块开（bandcl=1.0） | 同上 | 90.75 | 83.80 | 85.44 |
+| **净效应** | | **full − base** | | **−0.86** | **−1.77** | −1.40 |
+
+复现命令（`sam_original_sprsound/` 下）：
+
+```bash
+# 原版阶梯
+python train_event.py --no_wrs --no_sam --checkpoint_dir ./checkpoints/ast_adamw
+python train_event.py --no_sam        --checkpoint_dir ./checkpoints/ast_wrs
+# 方法 2.5
+python train_event.py --no_sam --optimizer adam --lr 5e-5 --weight_decay 1e-6 \
+  --bandcl_weight 1.0 --epochs 20 --checkpoint_dir ./checkpoints/m25_base
+python train_event.py --use_patch_mix --use_same_band_mix --use_band_importance \
+  --use_freq_weighted_lam --use_bandcl --bandcl_weight 1.0 --no_sam \
+  --optimizer adam --lr 5e-5 --weight_decay 1e-6 --epochs 20 --checkpoint_dir ./checkpoints/m25_full
+# 分层评估（自动按 ckpt 键选择 CustomAST / BandAware 模型）
+python evaluate_split.py checkpoints/<ckpt_dir>/best_model.pth
+```
+
+**结论（全部单种子，噪声带 ±0.5~1）**：
+
+1. inter-only 最优是最朴素的 **WRS + AdamW（93.20）**——SAM 无增益（③ 92.53）、四模块无增益（2.5 净 −0.86/−1.77）；
+2. **协议影响大于模块**：README 2.5 的 Adam 5e-5 协议整体比 AdamW 1e-5 低约 1~1.5 分；
+3. 与上文方法 3 的 Exp0–5（SAM+模块）表同方向：**四模块在 7 分类上无可分辨收益**，ICBHI 上的提升不迁移到 SPRSound；
+4. 双口径会改变行间排序与结论（如 2.5-full 的 intra +1.70 但 inter −0.86）——**论文表格必须声明口径**。
